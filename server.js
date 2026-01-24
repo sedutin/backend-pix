@@ -3,14 +3,13 @@ import axios from "axios";
 import cors from "cors";
 
 const app = express();
-
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-/* Banco fake */
+/* Banco fake para testes */
 const pagamentos = {};
 
 /* TESTE */
@@ -22,10 +21,7 @@ app.get("/", (req, res) => {
 app.post("/pix", async (req, res) => {
   try {
     const { valor, descricao, email } = req.body;
-
-    if (!valor || !email) {
-      return res.status(400).json({ erro: "Dados inválidos" });
-    }
+    if (!valor || !email) return res.status(400).json({ erro: "Dados inválidos" });
 
     const pagamento = await axios.post(
       "https://api.mercadopago.com/v1/payments",
@@ -45,9 +41,7 @@ app.post("/pix", async (req, res) => {
     );
 
     const id = pagamento.data.id;
-
     pagamentos[id] = { status: "pending" };
-
     res.json(pagamento.data);
 
   } catch (err) {
@@ -59,27 +53,16 @@ app.post("/pix", async (req, res) => {
 /* WEBHOOK */
 app.post("/webhook", async (req, res) => {
   try {
-    const paymentId =
-      req.body?.data?.id ||
-      req.body?.id;
-
-    if (!paymentId) {
-      return res.sendStatus(200);
-    }
+    const paymentId = req.body?.data?.id || req.body?.id;
+    if (!paymentId) return res.sendStatus(200);
 
     const response = await axios.get(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
-        },
-      }
+      { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } }
     );
 
     const status = response.data.status;
-
     pagamentos[paymentId] = { status };
-
     console.log("💰 Pagamento atualizado:", paymentId, status);
 
     res.sendStatus(200);
@@ -96,6 +79,4 @@ app.get("/status/:id", (req, res) => {
   res.json({ status });
 });
 
-app.listen(PORT, () => {
-  console.log("Servidor rodando na porta " + PORT);
-});
+app.listen(PORT, () => console.log("Servidor rodando na porta " + PORT));
