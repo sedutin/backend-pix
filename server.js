@@ -1,63 +1,66 @@
 import express from "express";
-import fetch from "node-fetch";
+import axios from "axios";
 import cors from "cors";
 
 const app = express();
-app.use(cors());
+
+/* CORS */
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+app.options("*", cors());
 app.use(express.json());
 
+/* ENV */
+const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-const payments = new Map();
+/* TESTE */
+app.get("/", (req, res) => {
+  res.send("API Pix online 🚀");
+});
 
+/* PIX */
 app.post("/pix", async (req, res) => {
-  const { valor, descricao, email } = req.body;
+  try {
+    const { valor, descricao, email } = req.body;
 
-  const response = await fetch("https://api.mercadopago.com/v1/payments", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${ACCESS_TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      transaction_amount: valor,
-      description: descricao,
-      payment_method_id: "pix",
-      payer: { email }
-    })
-  });
-
-  const data = await response.json();
-
-  payments.set(data.id.toString(), "pending");
-
-  res.json(data);
-});
-
-app.post("/webhook", async (req, res) => {
-  const paymentId = req.body?.data?.id;
-  if (!paymentId) return res.sendStatus(200);
-
-  const response = await fetch(
-    `https://api.mercadopago.com/v1/payments/${paymentId}`,
-    {
-      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
+    if (!valor || !email) {
+      return res.status(400).json({ erro: "Dados inválidos" });
     }
-  );
 
-  const data = await response.json();
+    const idempotencyKey = `pix-${Date.now()}-${Math.random()}`;
 
-  if (data.status === "approved") {
-    payments.set(paymentId.toString(), "approved");
+    const pagamento = await axios.post(
+      "https://api.mercadopago.com/v1/payments",
+      {
+        transaction_amount: Number(valor),
+        description: descricao || "Pagamento Pix",
+        payment_method_id: "pix",
+        payer: { email }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": idempotencyKey
+        }
+      }
+    );
+
+    res.json(pagamento.data);
+
+  } catch (err) {
+    console.error("ERRO MP:", err.response?.data || err.message);
+    res.status(500).json({
+      erro: "Erro ao gerar Pix",
+      detalhe: err.response?.data
+    });
   }
-
-  res.sendStatus(200);
 });
 
-app.get("/status/:id", (req, res) => {
-  const status = payments.get(req.params.id) || "pending";
-  res.json({ status });
+app.listen(PORT, () => {
+  console.log("Servidor rodando na porta " + PORT);
 });
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Backend rodando na porta", PORT));
