@@ -10,9 +10,6 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-/* Banco fake */
-const pagamentos = {};
-
 /* TESTE */
 app.get("/", (req, res) => {
   res.send("API Pix online 🚀");
@@ -23,30 +20,22 @@ app.post("/pix", async (req, res) => {
   try {
     const { valor, descricao, email } = req.body;
 
-    if (!valor || !email) {
-      return res.status(400).json({ erro: "Dados inválidos" });
-    }
-
     const pagamento = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
         transaction_amount: Number(valor),
         description: descricao,
         payment_method_id: "pix",
-        payer: { email },
+        payer: { email }
       },
       {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`,
           "Content-Type": "application/json",
           "X-Idempotency-Key": `pix-${Date.now()}`
-        },
+        }
       }
     );
-
-    const id = pagamento.data.id;
-
-    pagamentos[id] = { status: "pending" };
 
     res.json(pagamento.data);
 
@@ -56,44 +45,28 @@ app.post("/pix", async (req, res) => {
   }
 });
 
-/* WEBHOOK */
-app.post("/webhook", async (req, res) => {
+/* STATUS EM TEMPO REAL (API MP) */
+app.get("/status/:id", async (req, res) => {
   try {
-    const paymentId =
-      req.body?.data?.id ||
-      req.body?.id;
-
-    if (!paymentId) {
-      return res.sendStatus(200);
-    }
+    const paymentId = req.params.id;
 
     const response = await axios.get(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
       {
         headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
-        },
+          Authorization: `Bearer ${ACCESS_TOKEN}`
+        }
       }
     );
 
     const status = response.data.status;
 
-    pagamentos[paymentId] = { status };
-
-    console.log("💰 Pagamento atualizado:", paymentId, status);
-
-    res.sendStatus(200);
+    res.json({ status });
 
   } catch (err) {
-    console.error("Erro webhook:", err.message);
-    res.sendStatus(500);
+    console.error("Erro status:", err.message);
+    res.status(500).json({ status: "error" });
   }
-});
-
-/* STATUS */
-app.get("/status/:id", (req, res) => {
-  const status = pagamentos[req.params.id]?.status || "pending";
-  res.json({ status });
 });
 
 app.listen(PORT, () => {
