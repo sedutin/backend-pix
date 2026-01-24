@@ -1,87 +1,63 @@
 import express from "express";
-import axios from "axios";
+import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
-
-/* CORS */
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
-app.options("*", cors());
+app.use(cors());
 app.use(express.json());
 
-/* ENV */
-const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-/* TESTE */
-app.get("/", (req, res) => {
-  res.send("API Pix online 🚀");
-});
+const payments = new Map();
 
-/* PIX */
 app.post("/pix", async (req, res) => {
-  try {
-    const { valor, descricao, email } = req.body;
+  const { valor, descricao, email } = req.body;
 
-    if (!valor || !email) {
-      return res.status(400).json({ erro: "Dados inválidos" });
+  const response = await fetch("https://api.mercadopago.com/v1/payments", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      transaction_amount: valor,
+      description: descricao,
+      payment_method_id: "pix",
+      payer: { email }
+    })
+  });
+
+  const data = await response.json();
+
+  payments.set(data.id.toString(), "pending");
+
+  res.json(data);
+});
+
+app.post("/webhook", async (req, res) => {
+  const paymentId = req.body?.data?.id;
+  if (!paymentId) return res.sendStatus(200);
+
+  const response = await fetch(
+    `https://api.mercadopago.com/v1/payments/${paymentId}`,
+    {
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
     }
+  );
 
-    const idempotencyKey = `pix-${Date.now()}-${Math.random()}`;
+  const data = await response.json();
 
-    const pagamento = await axios.post(
-      "https://api.mercadopago.com/v1/payments",
-      {
-        transaction_amount: Number(valor),
-        description: descricao || "Pagamento Pix",
-        payment_method_id: "pix",
-        payer: { email }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
-          "Content-Type": "application/json",
-          "X-Idempotency-Key": idempotencyKey
-        }
-      }
-    );
-
-    res.json(pagamento.data);
-
-  } catch (err) {
-    console.error("Erro:", err.response?.data || err.message);
-    res.status(500).json({
-      erro: "Erro ao gerar Pix",
-      detalhe: err.response?.data
-    });
+  if (data.status === "approved") {
+    payments.set(paymentId.toString(), "approved");
   }
+
+  res.sendStatus(200);
 });
 
-/* Webhook do Mercado Pago para notificação de pagamento */
-app.post("/webhook", (req, res) => {
-  const data = req.body;
-
-  // Verificar se o pagamento foi aprovado
-  if (data?.data?.status === "approved") {
-    const { transaction_amount, payer, id } = data.data;
-
-    // Aqui, você pode realizar ações como enviar uma mensagem no WhatsApp automaticamente
-    const mensagem = encodeURIComponent(`Pagamento recebido: R$ ${transaction_amount}\nID: ${id}\nCliente: ${payer.name}`);
-
-    // Redirecionar automaticamente para o WhatsApp
-    const urlZap = `https://wa.me/5574999249732?text=${mensagem}`;
-
-    // Responder com o link de WhatsApp para o frontend
-    res.json({ redirectTo: urlZap });
-  } else {
-    res.status(400).json({ erro: "Pagamento não aprovado" });
-  }
+app.get("/status/:id", (req, res) => {
+  const status = payments.get(req.params.id) || "pending";
+  res.json({ status });
 });
 
-app.listen(PORT, () => {
-  console.log("Servidor rodando na porta " + PORT);
-});
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Backend rodando na porta", PORT));
