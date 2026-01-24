@@ -10,12 +10,10 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-/* TESTE */
 app.get("/", (req, res) => {
   res.send("API Pix online 🚀");
 });
 
-/* CRIAR PIX */
 app.post("/pix", async (req, res) => {
   try {
     const { valor, descricao, email } = req.body;
@@ -38,19 +36,18 @@ app.post("/pix", async (req, res) => {
 
     const tx = pagamento.data.point_of_interaction.transaction_data;
 
+    // ⚠️ ISSO É O MAIS IMPORTANTE
     res.json({
       id: pagamento.data.id,
       qr_code: tx.qr_code,
       qr_code_base64: tx.qr_code_base64,
-      status: pagamento.data.status,
     });
   } catch (err) {
-    console.error("Erro MP:", err.response?.data || err.message);
+    console.error(err.response?.data || err.message);
     res.status(500).json({ erro: "Erro ao gerar Pix" });
   }
 });
 
-/* CONSULTAR STATUS */
 app.get("/status/:id", async (req, res) => {
   try {
     const { id } = req.params;
