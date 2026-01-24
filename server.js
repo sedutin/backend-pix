@@ -5,20 +5,12 @@ import cors from "cors";
 const app = express();
 
 /* CORS */
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
-app.options("*", cors());
+app.use(cors());
 app.use(express.json());
 
-/* ENV */
+/* CONFIG */
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
-
-/* 💾 Banco fake em memória (pra teste) */
-const pagamentos = {};
 
 /* TESTE */
 app.get("/", (req, res) => {
@@ -34,8 +26,6 @@ app.post("/pix", async (req, res) => {
       return res.status(400).json({ erro: "Dados inválidos" });
     }
 
-    const idempotencyKey = `pix-${Date.now()}-${Math.random()}`;
-
     const pagamento = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
@@ -47,41 +37,28 @@ app.post("/pix", async (req, res) => {
       {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`,
-          "Content-Type": "application/json",
-          "X-Idempotency-Key": idempotencyKey
+          "Content-Type": "application/json"
         }
       }
     );
-
-    const id = pagamento.data.id;
-
-    // salvar status inicial
-    pagamentos[id] = {
-      status: "pending"
-    };
 
     res.json(pagamento.data);
 
   } catch (err) {
     console.error("ERRO MP:", err.response?.data || err.message);
     res.status(500).json({
-      erro: "Erro ao gerar Pix",
-      detalhe: err.response?.data
+      erro: "Erro ao gerar Pix"
     });
   }
 });
 
-/* 2️⃣ WEBHOOK MERCADO PAGO */
-app.post("/webhook", async (req, res) => {
+/* 2️⃣ CONSULTAR STATUS DO PIX (SEM WEBHOOK) */
+app.get("/status/:id", async (req, res) => {
   try {
-    const paymentId = req.body?.data?.id;
-
-    if (!paymentId) {
-      return res.sendStatus(200);
-    }
+    const { id } = req.params;
 
     const resposta = await axios.get(
-      `https://api.mercadopago.com/v1/payments/${paymentId}`,
+      `https://api.mercadopago.com/v1/payments/${id}`,
       {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`
@@ -91,27 +68,12 @@ app.post("/webhook", async (req, res) => {
 
     const status = resposta.data.status;
 
-    if (pagamentos[paymentId]) {
-      pagamentos[paymentId].status = status;
-    }
-
-    console.log("💰 Pix atualizado:", paymentId, status);
-
-    res.sendStatus(200);
+    res.json({ status });
 
   } catch (err) {
-    console.error("Erro webhook:", err.message);
-    res.sendStatus(500);
+    console.error("Erro status:", err.message);
+    res.json({ status: "pending" });
   }
-});
-
-/* 3️⃣ CONSULTAR STATUS DO PAGAMENTO */
-app.get("/status/:id", (req, res) => {
-  const { id } = req.params;
-
-  const status = pagamentos[id]?.status || "pending";
-
-  res.json({ status });
 });
 
 /* START */
