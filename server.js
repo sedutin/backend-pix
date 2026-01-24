@@ -30,12 +30,15 @@ app.post("/pix", async (req, res) => {
         transaction_amount: Number(valor),
         description: descricao,
         payment_method_id: "pix",
-        payer: { email }
+        payer: {
+          email
+        }
       },
       {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": `pix-${Date.now()}`
         }
       }
     );
@@ -43,7 +46,10 @@ app.post("/pix", async (req, res) => {
     res.json(pagamento.data);
   } catch (err) {
     console.error(err.response?.data || err.message);
-    res.status(500).json({ erro: "Erro ao gerar Pix" });
+    res.status(500).json({
+      erro: "Erro ao gerar Pix",
+      detalhe: err.response?.data
+    });
   }
 });
 
