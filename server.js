@@ -3,90 +3,118 @@ import axios from "axios";
 import cors from "cors";
 
 const app = express();
-app.use(cors());
+
+/* CORS */
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+app.options("*", cors());
 app.use(express.json());
 
-const TELEGRAM_TOKEN = "8583766383:AAEtkX5UpHG7DlzSpcMzvxZzUaSamdOSwY0";
-const CHAT_ID = "8321599291";
+/* ENV */
+const PORT = process.env.PORT || 3000;
+const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-const pedidos = {}; // memória (simples e funcional)
+/* 💾 Banco fake em memória (teste) */
+const pagamentos = {};
 
-// ====== GERAR PIX ======
+/* TESTE */
+app.get("/", (req, res) => {
+  res.send("API Pix online 🚀");
+});
+
+/* 1️⃣ CRIAR PIX */
 app.post("/pix", async (req, res) => {
-  const { valor, descricao } = req.body;
-
   try {
-    // ⚠️ aqui você mantém SUA lógica atual de gerar Pix
-    const pix = await axios.post(
-      "https://backend-pix-yn4k.onrender.com",
-      { valor, descricao }
+    const { valor, descricao, email } = req.body;
+
+    if (!valor || !email) {
+      return res.status(400).json({ erro: "Dados inválidos" });
+    }
+
+    const idempotencyKey = `pix-${Date.now()}-${Math.random()}`;
+
+    const pagamento = await axios.post(
+      "https://api.mercadopago.com/v1/payments",
+      {
+        transaction_amount: Number(valor),
+        description: descricao || "Pagamento Pix",
+        payment_method_id: "pix",
+        payer: { email },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": idempotencyKey,
+        },
+      }
     );
 
-    const paymentId = pix.data.id;
+    const id = pagamento.data.id;
 
-    pedidos[paymentId] = {
+    // salvar status inicial
+    pagamentos[id] = {
       status: "pending",
-      descricao
     };
 
-    res.json(pix.data);
+    res.json(pagamento.data);
   } catch (err) {
-    res.status(500).json({ error: "Erro ao gerar Pix" });
+    console.error("ERRO MP:", err.response?.data || err.message);
+    res.status(500).json({
+      erro: "Erro ao gerar Pix",
+      detalhe: err.response?.data,
+    });
   }
 });
 
-// ====== STATUS PRO FRONT ======
-app.get("/status/:id", (req, res) => {
-  const pedido = pedidos[req.params.id];
-  res.json({ status: pedido?.status || "pending" });
-});
+/* 2️⃣ WEBHOOK MERCADO PAGO */
+app.post("/webhook", async (req, res) => {
+  try {
+    const paymentId = req.body?.data?.id;
 
-// ====== WEBHOOK DO PIX (QUANDO APROVAR) ======
-app.post("/webhook-pix", async (req, res) => {
-  const { paymentId } = req.body;
+    if (!paymentId) {
+      return res.sendStatus(200);
+    }
 
-  if (!pedidos[paymentId]) return res.sendStatus(200);
-
-  pedidos[paymentId].status = "paid";
-
-  // 🔔 AVISA NO TELEGRAM
-  await axios.post(
-    `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
-    {
-      chat_id: CHAT_ID,
-      text: `💰 PIX APROVADO!\n\nPedido: ${pedidos[paymentId].descricao}`,
-      reply_markup: {
-        inline_keyboard: [[
-          {
-            text: "✅ LIBERAR PEDIDO",
-            callback_data: `liberar_${paymentId}`
-          }
-        ]]
+    const resposta = await axios.get(
+      `https://api.mercadopago.com/v1/payments/${paymentId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+        },
       }
-    }
-  );
+    );
 
-  res.sendStatus(200);
+    const status = resposta.data.status;
+
+    if (pagamentos[paymentId]) {
+      pagamentos[paymentId].status = status;
+    }
+
+    console.log("💰 Pix atualizado:", paymentId, status);
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Erro webhook:", err.message);
+    res.sendStatus(500);
+  }
 });
 
-// ====== BOTÃO LIBERAR ======
-app.post("/telegram", async (req, res) => {
-  const callback = req.body.callback_query;
+/* 3️⃣ CONSULTAR STATUS DO PAGAMENTO */
+app.get("/status/:id", (req, res) => {
+  const { id } = req.params;
 
-  if (!callback) return res.sendStatus(200);
+  const status = pagamentos[id]?.status || "pending";
 
-  const paymentId = callback.data.replace("liberar_", "");
-  pedidos[paymentId].status = "approved";
-
-  await axios.post(
-    `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
-    {
-      chat_id: CHAT_ID,
-      text: `✅ Pedido ${paymentId} liberado com sucesso`
-    }
-  );
-
-  res.sendStatus(200);
+  res.json({ status });
 });
 
-app.listen(3000, () => console.log("🔥 Backend rodando"));
+/* START */
+app.listen(PORT, () => {
+  console.log("Servidor rodando na porta " + PORT);
+});
