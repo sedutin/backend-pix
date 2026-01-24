@@ -4,66 +4,66 @@ import cors from "cors";
 
 const app = express();
 
-/* CORS */
+/* CONFIG */
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-/* ENV */
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
 /* TESTE */
 app.get("/", (req, res) => {
-  res.send("API Pix online 🚀");
+  res.send("API Pix funcionando 🚀");
 });
 
-/* 1️⃣ CRIAR PIX */
+/* CRIAR PIX */
 app.post("/pix", async (req, res) => {
   try {
     const { valor, descricao, email } = req.body;
 
-    if (!valor || !email) {
-      return res.status(400).json({ erro: "Dados inválidos" });
+    if (!valor || Number(valor) <= 0 || !email) {
+      return res.status(400).json({ erro: "Valor ou email inválido" });
     }
 
-    const pagamento = await axios.post(
+    const response = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
-        transaction_amount: Number(valor),
+        transaction_amount: Number(Number(valor).toFixed(2)),
         description: descricao || "Pagamento Pix",
         payment_method_id: "pix",
-        payer: { email },
+        payer: { email }
       },
       {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`,
-          "Content-Type": "application/json",
-        },
+          "Content-Type": "application/json"
+        }
       }
     );
 
-    res.json(pagamento.data);
+    res.json(response.data);
   } catch (err) {
-    console.error("Erro Pix:", err.response?.data || err.message);
-    res.status(500).json({ erro: "Erro ao gerar Pix" });
+    console.error("ERRO PIX:", err.response?.data || err.message);
+    res.status(500).json({
+      erro: "Erro ao gerar Pix",
+      detalhe: err.response?.data || err.message
+    });
   }
 });
 
-/* 2️⃣ CONSULTAR STATUS (OFICIAL MP) */
+/* CONSULTAR STATUS */
 app.get("/status/:id", async (req, res) => {
-  const { id } = req.params;
-
   try {
-    const resposta = await axios.get(
-      `https://api.mercadopago.com/v1/payments/${id}`,
+    const response = await axios.get(
+      `https://api.mercadopago.com/v1/payments/${req.params.id}`,
       {
         headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
-        },
+          Authorization: `Bearer ${ACCESS_TOKEN}`
+        }
       }
     );
 
-    res.json({ status: resposta.data.status });
+    res.json({ status: response.data.status });
   } catch (err) {
     res.json({ status: "pending" });
   }
@@ -71,5 +71,5 @@ app.get("/status/:id", async (req, res) => {
 
 /* START */
 app.listen(PORT, () => {
-  console.log("Servidor rodando na porta " + PORT);
+  console.log("Servidor rodando na porta", PORT);
 });
