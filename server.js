@@ -53,11 +53,32 @@ app.post("/pix", async (req, res) => {
     res.json(pagamento.data);
 
   } catch (err) {
-    console.error("ERRO MP:", err.response?.data || err.message);
+    console.error("Erro:", err.response?.data || err.message);
     res.status(500).json({
       erro: "Erro ao gerar Pix",
       detalhe: err.response?.data
     });
+  }
+});
+
+/* Webhook do Mercado Pago para notificação de pagamento */
+app.post("/webhook", (req, res) => {
+  const data = req.body;
+
+  // Verificar se o pagamento foi aprovado
+  if (data?.data?.status === "approved") {
+    const { transaction_amount, payer, id } = data.data;
+
+    // Aqui, você pode realizar ações como enviar uma mensagem no WhatsApp automaticamente
+    const mensagem = encodeURIComponent(`Pagamento recebido: R$ ${transaction_amount}\nID: ${id}\nCliente: ${payer.name}`);
+
+    // Redirecionar automaticamente para o WhatsApp
+    const urlZap = `https://wa.me/5574999249732?text=${mensagem}`;
+
+    // Responder com o link de WhatsApp para o frontend
+    res.json({ redirectTo: urlZap });
+  } else {
+    res.status(400).json({ erro: "Pagamento não aprovado" });
   }
 });
 
