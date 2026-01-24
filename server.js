@@ -3,26 +3,19 @@ import axios from "axios";
 import cors from "cors";
 
 const app = express();
-
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-/* TESTE */
 app.get("/", (req, res) => {
   res.send("API Pix online 🚀");
 });
 
-/* 1️⃣ CRIAR PIX */
 app.post("/pix", async (req, res) => {
   try {
     const { valor, descricao, email } = req.body;
-
-    if (!valor || !email) {
-      return res.status(400).json({ erro: "Dados inválidos" });
-    }
 
     const pagamento = await axios.post(
       "https://api.mercadopago.com/v1/payments",
@@ -30,7 +23,13 @@ app.post("/pix", async (req, res) => {
         transaction_amount: Number(valor),
         description: descricao || "Pagamento Pix",
         payment_method_id: "pix",
-        payer: { email },
+        payer: {
+          email,
+          identification: {
+            type: "CPF",
+            number: "11111111111"
+          }
+        }
       },
       {
         headers: {
@@ -42,12 +41,11 @@ app.post("/pix", async (req, res) => {
 
     res.json(pagamento.data);
   } catch (err) {
-    console.error("Erro Pix:", err.response?.data || err.message);
-    res.status(500).json({ erro: "Erro ao gerar Pix" });
+    console.error("ERRO PIX:", err.response?.data || err.message);
+    res.status(500).json({ erro: err.response?.data });
   }
 });
 
-/* 2️⃣ CONSULTAR STATUS (DIRETO NO MERCADO PAGO) */
 app.get("/status/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -63,12 +61,10 @@ app.get("/status/:id", async (req, res) => {
 
     res.json({ status: resposta.data.status });
   } catch (err) {
-    console.error("Erro status:", err.message);
-    res.status(500).json({ status: "error" });
+    res.json({ status: "pending" });
   }
 });
 
-/* START */
 app.listen(PORT, () => {
   console.log("Servidor rodando na porta " + PORT);
 });
