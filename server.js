@@ -13,9 +13,10 @@ app.use(cors({
 app.options("*", cors());
 app.use(express.json());
 
-/* ENV */
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
+
+const payments = new Map();
 
 /* TESTE */
 app.get("/", (req, res) => {
@@ -50,6 +51,8 @@ app.post("/pix", async (req, res) => {
       }
     );
 
+    payments.set(pagamento.data.id.toString(), "pending");
+
     res.json(pagamento.data);
 
   } catch (err) {
@@ -59,6 +62,38 @@ app.post("/pix", async (req, res) => {
       detalhe: err.response?.data
     });
   }
+});
+
+/* WEBHOOK */
+app.post("/webhook", async (req, res) => {
+  const paymentId = req.body?.data?.id || req.body?.id;
+
+  if (!paymentId) return res.sendStatus(200);
+
+  try {
+    const response = await axios.get(
+      `https://api.mercadopago.com/v1/payments/${paymentId}`,
+      {
+        headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
+      }
+    );
+
+    if (response.data.status === "approved") {
+      payments.set(paymentId.toString(), "approved");
+      console.log("Pagamento aprovado:", paymentId);
+    }
+
+  } catch (err) {
+    console.error("Erro webhook:", err.response?.data || err.message);
+  }
+
+  res.sendStatus(200);
+});
+
+/* STATUS PARA SITE */
+app.get("/status/:id", (req, res) => {
+  const status = payments.get(req.params.id) || "pending";
+  res.json({ status });
 });
 
 app.listen(PORT, () => {
