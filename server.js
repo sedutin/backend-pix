@@ -27,7 +27,7 @@ app.post("/pix", async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${APP_USR-4112858295555247-012013-b81f5580e3abe3c8b90de07373a6cb22-1079395237}`
+          Authorization: `Bearer ${ACCESS_TOKEN}`
         }
       }
     );
