@@ -18,7 +18,7 @@ app.post("/pix", async (req, res) => {
   try {
     // ⚠️ aqui você mantém SUA lógica atual de gerar Pix
     const pix = await axios.post(
-      "SUA_API_PIX_AQUI",
+      "https://backend-pix-yn4k.onrender.com",
       { valor, descricao }
     );
 
