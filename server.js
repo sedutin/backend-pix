@@ -4,22 +4,13 @@ import cors from "cors";
 
 const app = express();
 
-/* CORS */
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-app.options("*", cors());
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-/* ENV */
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-/* 💾 Banco fake em memória (teste) */
+/* Banco fake */
 const pagamentos = {};
 
 /* TESTE */
@@ -27,7 +18,7 @@ app.get("/", (req, res) => {
   res.send("API Pix online 🚀");
 });
 
-/* 1️⃣ CRIAR PIX */
+/* CRIAR PIX */
 app.post("/pix", async (req, res) => {
   try {
     const { valor, descricao, email } = req.body;
@@ -36,13 +27,11 @@ app.post("/pix", async (req, res) => {
       return res.status(400).json({ erro: "Dados inválidos" });
     }
 
-    const idempotencyKey = `pix-${Date.now()}-${Math.random()}`;
-
     const pagamento = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
         transaction_amount: Number(valor),
-        description: descricao || "Pagamento Pix",
+        description: descricao,
         payment_method_id: "pix",
         payer: { email },
       },
@@ -50,38 +39,35 @@ app.post("/pix", async (req, res) => {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`,
           "Content-Type": "application/json",
-          "X-Idempotency-Key": idempotencyKey,
+          "X-Idempotency-Key": `pix-${Date.now()}`
         },
       }
     );
 
     const id = pagamento.data.id;
 
-    // salvar status inicial
-    pagamentos[id] = {
-      status: "pending",
-    };
+    pagamentos[id] = { status: "pending" };
 
     res.json(pagamento.data);
+
   } catch (err) {
-    console.error("ERRO MP:", err.response?.data || err.message);
-    res.status(500).json({
-      erro: "Erro ao gerar Pix",
-      detalhe: err.response?.data,
-    });
+    console.error(err.response?.data || err.message);
+    res.status(500).json({ erro: "Erro ao gerar Pix" });
   }
 });
 
-/* 2️⃣ WEBHOOK MERCADO PAGO */
+/* WEBHOOK */
 app.post("/webhook", async (req, res) => {
   try {
-    const paymentId = req.body?.data?.id;
+    const paymentId =
+      req.body?.data?.id ||
+      req.body?.id;
 
     if (!paymentId) {
       return res.sendStatus(200);
     }
 
-    const resposta = await axios.get(
+    const response = await axios.get(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
       {
         headers: {
@@ -90,31 +76,26 @@ app.post("/webhook", async (req, res) => {
       }
     );
 
-    const status = resposta.data.status;
+    const status = response.data.status;
 
-    if (pagamentos[paymentId]) {
-      pagamentos[paymentId].status = status;
-    }
+    pagamentos[paymentId] = { status };
 
-    console.log("💰 Pix atualizado:", paymentId, status);
+    console.log("💰 Pagamento atualizado:", paymentId, status);
 
     res.sendStatus(200);
+
   } catch (err) {
     console.error("Erro webhook:", err.message);
     res.sendStatus(500);
   }
 });
 
-/* 3️⃣ CONSULTAR STATUS DO PAGAMENTO */
+/* STATUS */
 app.get("/status/:id", (req, res) => {
-  const { id } = req.params;
-
-  const status = pagamentos[id]?.status || "pending";
-
+  const status = pagamentos[req.params.id]?.status || "pending";
   res.json({ status });
 });
 
-/* START */
 app.listen(PORT, () => {
   console.log("Servidor rodando na porta " + PORT);
 });
