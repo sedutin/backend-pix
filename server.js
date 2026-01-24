@@ -42,3 +42,19 @@ app.post("/pix", async (req, res) => {
 app.listen(PORT, () => {
   console.log("Pix online na porta " + PORT);
 });
+import express from "express";
+import cors from "cors";
+
+const app = express();
+
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+app.options("*", cors());
+
+app.use(express.json());
+
+
