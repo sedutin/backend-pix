@@ -3,88 +3,74 @@ import axios from "axios";
 import cors from "cors";
 
 const app = express();
+
+/* CONFIG */
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-// memória simples
-let pedidos = {};
-
 /* TESTE */
 app.get("/", (req, res) => {
   res.send("API Pix online 🚀");
 });
 
-/* CRIAR PIX */
+/* 1️⃣ CRIAR PIX */
 app.post("/pix", async (req, res) => {
   try {
-    const { valor, descricao, nome, telefone } = req.body;
+    const { valor, descricao, email } = req.body;
+
+    if (!valor || !email) {
+      return res.status(400).json({ erro: "Dados inválidos" });
+    }
 
     const pagamento = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
         transaction_amount: Number(valor),
-        description: descricao,
+        description: descricao || "Pagamento Pix",
         payment_method_id: "pix",
-        payer: { email: "cliente@pix.com" }
+        payer: { email }
       },
       {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": `pix-${Date.now()}`
         }
       }
     );
 
-    pedidos[pagamento.data.id] = {
-      nome,
-      telefone,
-      descricao,
-      valor,
-      liberado: false
-    };
-
     res.json(pagamento.data);
-  } catch (e) {
-    res.status(500).json({ erro: "Erro Pix" });
+  } catch (err) {
+    console.error("ERRO PIX:", err.response?.data || err.message);
+    res.status(500).json({ erro: "Erro ao gerar Pix" });
   }
 });
 
-/* STATUS PIX */
+/* 2️⃣ CONSULTAR STATUS (🔥 SOLUÇÃO DEFINITIVA 🔥) */
 app.get("/status/:id", async (req, res) => {
+  const { id } = req.params;
+
   try {
-    const r = await axios.get(
-      `https://api.mercadopago.com/v1/payments/${req.params.id}`,
+    const resposta = await axios.get(
+      `https://api.mercadopago.com/v1/payments/${id}`,
       {
-        headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`
+        }
       }
     );
-    res.json({ status: r.data.status });
-  } catch {
+
+    res.json({ status: resposta.data.status });
+  } catch (err) {
+    console.error("ERRO STATUS:", err.message);
     res.json({ status: "pending" });
   }
 });
 
-/* CLIENTE ESPERA LIBERAÇÃO */
-app.get("/liberado/:id", (req, res) => {
-  res.json({ liberado: pedidos[req.params.id]?.liberado || false });
+/* START */
+app.listen(PORT, () => {
+  console.log("Servidor rodando na porta " + PORT);
 });
-
-/* ADMIN LIBERA */
-app.post("/liberar/:id", (req, res) => {
-  if (pedidos[req.params.id]) {
-    pedidos[req.params.id].liberado = true;
-  }
-  res.json({ ok: true });
-});
-
-/* LISTA ADMIN */
-app.get("/admin/pedidos", (req, res) => {
-  res.json(pedidos);
-});
-
-app.listen(PORT, () =>
-  console.log("Servidor rodando na porta " + PORT)
-);
