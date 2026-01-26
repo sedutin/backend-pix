@@ -1,6 +1,7 @@
 import express from "express";
 import axios from "axios";
 import cors from "cors";
+import fetch from "node-fetch"; // Adicionando o fetch para enviar a mensagem
 
 const app = express();
 
@@ -9,7 +10,10 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const ACCESS_TOKEN = process.env.MP_TOKEN;
+const ACCESS_TOKEN = process.env.MP_TOKEN;  // Token MercadoPago
+const WHATSAPP_API_URL = 'https://api.zapier.com/hooks/catch/LUFNU88T4R1476TN/'; // Seu Webhook Zap API
+const WHATSAPP_PHONE = '74999249732'; // Seu número de WhatsApp
+const ZAP_API_TOKEN = 'YOUR_API_TOKEN';  // Token de autenticação da API Zap (se necessário)
 
 /* TESTE */
 app.get("/", (req, res) => {
@@ -69,6 +73,30 @@ app.get("/status/:id", async (req, res) => {
     res.json({ status: "pending" });
   }
 });
+
+/* Função para enviar a mensagem via WhatsApp */
+async function enviarMensagemWhatsApp(msg) {
+  const data = {
+    message: msg,
+    phone: WHATSAPP_PHONE // Seu número de WhatsApp
+  };
+
+  try {
+    const response = await fetch(WHATSAPP_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${ZAP_API_TOKEN}` // Token de autenticação da API Zap (se necessário)
+      },
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+    console.log('Mensagem enviada com sucesso!', result);
+  } catch (err) {
+    console.error('Erro ao enviar mensagem para WhatsApp:', err);
+  }
+}
 
 /* START */
 app.listen(PORT, () => {
