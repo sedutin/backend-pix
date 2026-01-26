@@ -1,7 +1,7 @@
 import express from "express";
 import axios from "axios";
 import cors from "cors";
-import fetch from "node-fetch"; // Adicionando o fetch para enviar a mensagem
+import fetch from "node-fetch"; // Usando a importação correta para node-fetch versão 3+
 
 const app = express();
 
@@ -11,9 +11,9 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;  // Token MercadoPago
-const WHATSAPP_API_URL = 'https://api.zapier.com/hooks/catch/LUFNU88T4R1476TN/'; // Seu Webhook Zap API
-const WHATSAPP_PHONE = '74999249732'; // Seu número de WhatsApp
-const ZAP_API_TOKEN = 'YOUR_API_TOKEN';  // Token de autenticação da API Zap (se necessário)
+const WHATSAPP_API_URL = 'https://api.zapier.com/hooks/catch/LUFNU88T4R1476TN/'; // Webhook Zap API
+const WHATSAPP_PHONE = '5574999249732'; // Seu número de WhatsApp
+const ZAP_API_TOKEN = 'LUFNU88T4R1476TN';  // Token de autenticação da API Zap
 
 /* TESTE */
 app.get("/", (req, res) => {
@@ -68,6 +68,13 @@ app.get("/status/:id", async (req, res) => {
     );
 
     res.json({ status: resposta.data.status });
+
+    // Se o pagamento for aprovado, envia a mensagem para o WhatsApp
+    if (resposta.data.status === "approved") {
+      const msg = `📦 NOVO PEDIDO PAGO\n\nProduto: ${resposta.data.description}\nValor: R$ ${resposta.data.transaction_amount}\nNome: ${resposta.data.payer.name}\nEmail: ${resposta.data.payer.email}`;
+      await enviarMensagemWhatsApp(msg);
+    }
+
   } catch (err) {
     console.error("ERRO STATUS:", err.message);
     res.json({ status: "pending" });
@@ -86,7 +93,7 @@ async function enviarMensagemWhatsApp(msg) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${ZAP_API_TOKEN}` // Token de autenticação da API Zap (se necessário)
+        'Authorization': `Bearer ${ZAP_API_TOKEN}` // Token de autenticação da API Zap
       },
       body: JSON.stringify(data),
     });
