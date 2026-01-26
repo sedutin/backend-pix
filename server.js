@@ -1,7 +1,6 @@
 import express from "express";
 import axios from "axios";
 import cors from "cors";
-import fetch from "node-fetch"; // Usando a importação correta para node-fetch versão 3+
 
 const app = express();
 
@@ -10,10 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const ACCESS_TOKEN = process.env.MP_TOKEN;  // Token MercadoPago
-const WHATSAPP_API_URL = 'https://api.zapier.com/hooks/catch/LUFNU88T4R1476TN/'; // Webhook Zap API
-const WHATSAPP_PHONE = '5574999249732'; // Seu número de WhatsApp
-const ZAP_API_TOKEN = 'LUFNU88T4R1476TN';  // Token de autenticação da API Zap
+const ACCESS_TOKEN = process.env.MP_TOKEN;
 
 /* TESTE */
 app.get("/", (req, res) => {
@@ -67,12 +63,45 @@ app.get("/status/:id", async (req, res) => {
       }
     );
 
-    res.json({ status: resposta.data.status });
+    const status = resposta.data.status;
+    res.json({ status });
 
-    // Se o pagamento for aprovado, envia a mensagem para o WhatsApp
-    if (resposta.data.status === "approved") {
-      const msg = `📦 NOVO PEDIDO PAGO\n\nProduto: ${resposta.data.description}\nValor: R$ ${resposta.data.transaction_amount}\nNome: ${resposta.data.payer.name}\nEmail: ${resposta.data.payer.email}`;
-      await enviarMensagemWhatsApp(msg);
+    // Função para enviar a mensagem pelo WhatsApp usando APIDOZAP
+    async function enviarWhatsApp(msg) {
+      try {
+        const response = await fetch("https://api.apidozap.com/sendMessage", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer LUFNU88T4R1476TN` // Token da sua API APIDOZAP
+          },
+          body: JSON.stringify({
+            phone: "74999249732", // Seu número do WhatsApp (sem o + ou espaços)
+            message: msg
+          })
+        });
+
+        if (!response.ok) throw new Error("Erro ao enviar WhatsApp");
+        console.log("Mensagem enviada para o WhatsApp com sucesso!");
+      } catch (err) {
+        console.error("Erro ao enviar mensagem para o WhatsApp:", err);
+      }
+    }
+
+    // Verificar se o pagamento foi aprovado
+    if (status === "approved") {
+      // Dados para enviar no WhatsApp
+      const msg = encodeURIComponent(
+        `📦 NOVO PEDIDO PAGO\n\n` +
+        `Produto: ${req.body.descricao}\n` +
+        `Valor: R$ ${req.body.valor}\n` +
+        `Email do Cliente: ${req.body.email}`
+      );
+
+      // Envio automático para o WhatsApp do admin
+      await enviarWhatsApp(msg); // Chama a função para enviar o WhatsApp
+
+      console.log("Pagamento aprovado, notificação enviada!");
     }
 
   } catch (err) {
@@ -80,30 +109,6 @@ app.get("/status/:id", async (req, res) => {
     res.json({ status: "pending" });
   }
 });
-
-/* Função para enviar a mensagem via WhatsApp */
-async function enviarMensagemWhatsApp(msg) {
-  const data = {
-    message: msg,
-    phone: WHATSAPP_PHONE // Seu número de WhatsApp
-  };
-
-  try {
-    const response = await fetch(WHATSAPP_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${ZAP_API_TOKEN}` // Token de autenticação da API Zap
-      },
-      body: JSON.stringify(data),
-    });
-
-    const result = await response.json();
-    console.log('Mensagem enviada com sucesso!', result);
-  } catch (err) {
-    console.error('Erro ao enviar mensagem para WhatsApp:', err);
-  }
-}
 
 /* START */
 app.listen(PORT, () => {
