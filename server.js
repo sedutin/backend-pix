@@ -66,31 +66,8 @@ app.get("/status/:id", async (req, res) => {
     const status = resposta.data.status;
     res.json({ status });
 
-    // Função para enviar a mensagem pelo WhatsApp usando APIDOZAP
-    async function enviarWhatsApp(msg) {
-      try {
-        const response = await fetch("https://api.apidozap.com/sendMessage", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer LUFNU88T4R1476TN` // Token da sua API APIDOZAP
-          },
-          body: JSON.stringify({
-            phone: "74999249732", // Seu número do WhatsApp (sem o + ou espaços)
-            message: msg
-          })
-        });
-
-        if (!response.ok) throw new Error("Erro ao enviar WhatsApp");
-        console.log("Mensagem enviada para o WhatsApp com sucesso!");
-      } catch (err) {
-        console.error("Erro ao enviar mensagem para o WhatsApp:", err);
-      }
-    }
-
-    // Verificar se o pagamento foi aprovado
+    // Se o pagamento foi aprovado, envia a mensagem no WhatsApp
     if (status === "approved") {
-      // Dados para enviar no WhatsApp
       const msg = encodeURIComponent(
         `📦 NOVO PEDIDO PAGO\n\n` +
         `Produto: ${req.body.descricao}\n` +
@@ -98,10 +75,9 @@ app.get("/status/:id", async (req, res) => {
         `Email do Cliente: ${req.body.email}`
       );
 
-      // Envio automático para o WhatsApp do admin
-      await enviarWhatsApp(msg); // Chama a função para enviar o WhatsApp
-
-      console.log("Pagamento aprovado, notificação enviada!");
+      // Enviar a mensagem para o seu WhatsApp sem que o cliente perceba
+      await enviarWhatsApp(msg); // Envia a mensagem para o WhatsApp
+      console.log("Pagamento aprovado, notificação enviada para o WhatsApp!");
     }
 
   } catch (err) {
@@ -109,6 +85,28 @@ app.get("/status/:id", async (req, res) => {
     res.json({ status: "pending" });
   }
 });
+
+// Função para enviar a mensagem para o WhatsApp
+async function enviarWhatsApp(msg) {
+  try {
+    const response = await fetch("https://api.apidozap.com/sendMessage", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer LUFNU88T4R1476TN` // Token da sua API APIDOZAP
+      },
+      body: JSON.stringify({
+        phone: "74999249732", // Seu número de WhatsApp (sem o + ou espaços)
+        message: msg
+      })
+    });
+
+    if (!response.ok) throw new Error("Erro ao enviar WhatsApp");
+    console.log("Mensagem enviada para o WhatsApp com sucesso!");
+  } catch (err) {
+    console.error("Erro ao enviar mensagem para o WhatsApp:", err);
+  }
+}
 
 /* START */
 app.listen(PORT, () => {
