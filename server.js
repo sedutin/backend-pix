@@ -49,7 +49,7 @@ app.post("/pix", async (req, res) => {
   }
 });
 
-/* 2️⃣ CONSULTAR STATUS */
+/* 2️⃣ CONSULTAR STATUS (🔥 SOLUÇÃO DEFINITIVA 🔥) */
 app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -70,9 +70,7 @@ app.get("/status/:id", async (req, res) => {
   }
 });
 
-/* 3️⃣ ENVIAR MENSAGEM PARA O WHATSAPP */
-app.post("/enviar-whatsapp", async (req, res) => {
-  const { msg } = req.body;
-
-  try {
-    // En
+/* START */
+app.listen(PORT, () => {
+  console.log("Servidor rodando na porta " + PORT);
+});
