@@ -70,7 +70,9 @@ app.get("/status/:id", async (req, res) => {
   }
 });
 
-/* START */
-app.listen(PORT, () => {
-  console.log("Servidor rodando na porta " + PORT);
-});
+/* ROTA PARA ENVIAR MENSAGEM NO WHATSAPP */
+app.post("/enviar-whatsapp", async (req, res) => {
+  const { msg } = req.body;
+
+  try {
+    // Aqui você pode usar o WhatsApp API ou uma integração
