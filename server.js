@@ -49,7 +49,7 @@ app.post("/pix", async (req, res) => {
   }
 });
 
-/* 2️⃣ CONSULTAR STATUS (🔥 SOLUÇÃO DEFINITIVA 🔥) */
+/* 2️⃣ CONSULTAR STATUS */
 app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -70,9 +70,9 @@ app.get("/status/:id", async (req, res) => {
   }
 });
 
-/* ROTA PARA ENVIAR MENSAGEM NO WHATSAPP */
+/* 3️⃣ ENVIAR MENSAGEM PARA O WHATSAPP */
 app.post("/enviar-whatsapp", async (req, res) => {
   const { msg } = req.body;
 
   try {
-    // Aqui você pode usar o WhatsApp API ou uma integração
+    // En
