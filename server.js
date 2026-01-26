@@ -1,7 +1,6 @@
 import express from "express";
 import axios from "axios";
 import cors from "cors";
-import { iniciarWhatsApp, enviarMensagem } from "./whatsapp.js";
 
 const app = express();
 
@@ -12,15 +11,9 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-// 🔥 SEU NÚMERO DE WHATSAPP (DDD + 55)
-const NUMERO_ADMIN = "5574999249732";
-
-/* INICIA WHATSAPP */
-iniciarWhatsApp();
-
 /* TESTE */
 app.get("/", (req, res) => {
-  res.send("API Pix + WhatsApp online 🚀");
+  res.send("API Pix online 🚀");
 });
 
 /* 1️⃣ CRIAR PIX */
@@ -56,7 +49,7 @@ app.post("/pix", async (req, res) => {
   }
 });
 
-/* 2️⃣ CONSULTAR STATUS */
+/* 2️⃣ CONSULTAR STATUS (🔥 SOLUÇÃO DEFINITIVA 🔥) */
 app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -74,24 +67,6 @@ app.get("/status/:id", async (req, res) => {
   } catch (err) {
     console.error("ERRO STATUS:", err.message);
     res.json({ status: "pending" });
-  }
-});
-
-/* 3️⃣ ENVIAR WHATSAPP (🔥 AUTOMÁTICO 🔥) */
-app.post("/enviar-whatsapp", async (req, res) => {
-  try {
-    const { msg } = req.body;
-
-    if (!msg) {
-      return res.status(400).json({ erro: "Mensagem vazia" });
-    }
-
-    await enviarMensagem(NUMERO_ADMIN, msg);
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("ERRO WHATSAPP:", err.message);
-    res.status(500).json({ erro: "Falha ao enviar WhatsApp" });
   }
 });
 
