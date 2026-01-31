@@ -1,6 +1,7 @@
 import express from "express";
 import axios from "axios";
 import cors from "cors";
+import wppconnect from "@wppconnect-team/wppconnect";
 
 const app = express();
 
@@ -11,9 +12,39 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-/* TESTE */
+/* ===============================
+   WHATSAPP - WPPCONNECT
+================================ */
+
+let wppClient = null;
+let pagamentosNotificados = new Set();
+
+wppconnect.create({
+  session: "sedutin",
+  autoClose: false,
+  puppeteerOptions: {
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  },
+  catchQR: (base64Qr) => {
+    console.log("📲 COPIE O BASE64 ABAIXO E CONVERTA EM IMAGEM:");
+    console.log(base64Qr);
+  },
+  statusFind: (status) => {
+    console.log("📡 Status WhatsApp:", status);
+  }
+}).then(client => {
+  wppClient = client;
+  console.log("✅ WhatsApp conectado com sucesso");
+}).catch(err => {
+  console.error("❌ Erro WhatsApp:", err);
+});
+
+/* ===============================
+   ROTAS
+================================ */
+
 app.get("/", (req, res) => {
-  res.send("API Pix online 🚀");
+  res.send("API Pix + WhatsApp online 🚀");
 });
 
 /* 1️⃣ CRIAR PIX */
@@ -49,7 +80,7 @@ app.post("/pix", async (req, res) => {
   }
 });
 
-/* 2️⃣ CONSULTAR STATUS (🔥 SOLUÇÃO DEFINITIVA 🔥) */
+/* 2️⃣ STATUS + ENVIO AUTOMÁTICO WHATSAPP */
 app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -63,7 +94,33 @@ app.get("/status/:id", async (req, res) => {
       }
     );
 
-    res.json({ status: resposta.data.status });
+    const status = resposta.data.status;
+
+    if (
+      status === "approved" &&
+      wppClient &&
+      !pagamentosNotificados.has(id)
+    ) {
+      pagamentosNotificados.add(id);
+
+      const info = resposta.data;
+
+      const mensagem = `
+✅ PAGAMENTO CONFIRMADO
+
+📦 Produto: ${info.description}
+💰 Valor: R$ ${info.transaction_amount}
+
+🕒 ${new Date().toLocaleString("pt-BR")}
+`;
+
+      await wppClient.sendText(
+        "5574999249732@c.us", // SEU NÚMERO
+        mensagem
+      );
+    }
+
+    res.json({ status });
   } catch (err) {
     console.error("ERRO STATUS:", err.message);
     res.json({ status: "pending" });
@@ -72,5 +129,5 @@ app.get("/status/:id", async (req, res) => {
 
 /* START */
 app.listen(PORT, () => {
-  console.log("Servidor rodando na porta " + PORT);
+  console.log("🚀 Servidor rodando na porta " + PORT);
 });
