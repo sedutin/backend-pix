@@ -17,7 +17,7 @@ const TELEGRAM_CHAT_ID = process.env.TG_CHAT_ID;
 
 /* TESTE */
 app.get("/", (req, res) => {
-  res.send("API Pix online 🚀");
+  res.send("API Pix + Telegram online 🚀");
 });
 
 /* 1️⃣ CRIAR PIX */
@@ -66,12 +66,13 @@ app.get("/status/:id", async (req, res) => {
     );
 
     res.json({ status: resposta.data.status });
-  } catch {
+  } catch (e) {
+    console.error("ERRO STATUS:", e.message);
     res.json({ status: "aguardando" });
   }
 });
 
-/* 3️⃣ NOTIFICAR TELEGRAM */
+/* 3️⃣ NOTIFICAR TELEGRAM (CORRIGIDO) */
 app.post("/notify", async (req, res) => {
   try {
     const {
@@ -83,31 +84,32 @@ app.post("/notify", async (req, res) => {
       freefireId
     } = req.body;
 
-    const mensagem = `
-🔥 *NOVA COMPRA APROVADA*
+    const mensagem =
+`🔥 NOVA COMPRA APROVADA
 
-📦 Produto: *${produto}*
-💰 Valor: *R$ ${valor.toFixed(2)}*
-👤 Nome: *${nome}*
-📞 WhatsApp: *${whatsapp}*
-🎮 ID FF: *${freefireId || "BR MOD"}*
-🧩 Tipo: *${tipo}*
-🕒 ${new Date().toLocaleString("pt-BR")}
+Produto: ${produto}
+Valor: R$ ${Number(valor).toFixed(2)}
+Nome: ${nome}
+WhatsApp: ${whatsapp}
+ID FF: ${freefireId || "BR MOD"}
+Tipo: ${tipo}
+Hora: ${new Date().toLocaleString("pt-BR")}
 `;
 
-    await axios.post(
+    const tg = await axios.post(
       `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
       {
         chat_id: TELEGRAM_CHAT_ID,
-        text: mensagem,
-        parse_mode: "Markdown"
+        text: mensagem
       }
     );
 
+    console.log("Telegram OK:", tg.data);
     res.json({ ok: true });
+
   } catch (e) {
-    console.error("ERRO TELEGRAM:", e.message);
-    res.status(500).json({ erro: "Erro Telegram" });
+    console.error("ERRO TELEGRAM:", e.response?.data || e.message);
+    res.status(500).json({ erro: "Falha Telegram" });
   }
 });
 
