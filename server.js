@@ -1,27 +1,51 @@
 import express from "express";
 import axios from "axios";
 import cors from "cors";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
-
-/* CONFIG */
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const ACCESS_TOKEN = process.env.MP_TOKEN;
+const MP_TOKEN = process.env.MP_TOKEN;
+
+/* TELEGRAM */
+const TG_TOKEN = process.env.TG_TOKEN;
+const TG_CHAT_ID = process.env.TG_CHAT_ID;
+
+/* CACHE DE PAGAMENTOS NOTIFICADOS */
+const pagamentosNotificados = new Set();
 
 /* TESTE */
 app.get("/", (req, res) => {
-  res.send("API Pix online 🚀");
+  res.send("API Pix + Telegram ONLINE 🚀");
 });
 
-/* 1️⃣ CRIAR PIX */
+/* FUNÇÃO TELEGRAM */
+async function enviarTelegram(msg) {
+  try {
+    await axios.post(
+      `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,
+      {
+        chat_id: TG_CHAT_ID,
+        text: msg,
+        parse_mode: "HTML"
+      }
+    );
+  } catch (e) {
+    console.error("Erro Telegram:", e.message);
+  }
+}
+
+/* CRIAR PIX */
 app.post("/pix", async (req, res) => {
   try {
-    const { valor, descricao, email } = req.body;
+    const { valor, descricao, email, dadosCompra } = req.body;
 
-    if (!valor || !email) {
+    if (!valor || !email || !dadosCompra) {
       return res.status(400).json({ erro: "Dados inválidos" });
     }
 
@@ -29,13 +53,13 @@ app.post("/pix", async (req, res) => {
       "https://api.mercadopago.com/v1/payments",
       {
         transaction_amount: Number(valor),
-        description: descricao || "Pagamento Pix",
+        description: descricao,
         payment_method_id: "pix",
         payer: { email }
       },
       {
         headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
+          Authorization: `Bearer ${MP_TOKEN}`,
           "Content-Type": "application/json",
           "X-Idempotency-Key": `pix-${Date.now()}`
         }
@@ -49,7 +73,7 @@ app.post("/pix", async (req, res) => {
   }
 });
 
-/* 2️⃣ CONSULTAR STATUS (🔥 SOLUÇÃO DEFINITIVA 🔥) */
+/* STATUS + TELEGRAM */
 app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -58,14 +82,32 @@ app.get("/status/:id", async (req, res) => {
       `https://api.mercadopago.com/v1/payments/${id}`,
       {
         headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`
+          Authorization: `Bearer ${MP_TOKEN}`
         }
       }
     );
 
-    res.json({ status: resposta.data.status });
+    const status = resposta.data.status;
+    const info = resposta.data.description;
+
+    /* NOTIFICA UMA ÚNICA VEZ */
+    if (status === "approved" && !pagamentosNotificados.has(id)) {
+      pagamentosNotificados.add(id);
+
+      const msg = `
+<b>✅ PAGAMENTO APROVADO</b>
+
+🆔 <b>ID:</b> ${id}
+📦 <b>Descrição:</b> ${info}
+💰 <b>Valor:</b> R$ ${resposta.data.transaction_amount}
+
+🕒 ${new Date().toLocaleString("pt-BR")}
+`;
+      enviarTelegram(msg);
+    }
+
+    res.json({ status });
   } catch (err) {
-    console.error("ERRO STATUS:", err.message);
     res.json({ status: "aguardando" });
   }
 });
