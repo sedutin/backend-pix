@@ -1,51 +1,31 @@
 import express from "express";
 import axios from "axios";
 import cors from "cors";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const app = express();
+
+/* CONFIG */
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const MP_TOKEN = process.env.MP_TOKEN;
+const ACCESS_TOKEN = process.env.MP_TOKEN;
 
 /* TELEGRAM */
-const TG_TOKEN = process.env.TG_TOKEN;
-const TG_CHAT_ID = process.env.TG_CHAT_ID;
-
-/* CACHE DE PAGAMENTOS NOTIFICADOS */
-const pagamentosNotificados = new Set();
+const TELEGRAM_TOKEN = process.env.TG_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TG_CHAT_ID;
 
 /* TESTE */
 app.get("/", (req, res) => {
-  res.send("API Pix + Telegram ONLINE 🚀");
+  res.send("API Pix online 🚀");
 });
 
-/* FUNÇÃO TELEGRAM */
-async function enviarTelegram(msg) {
-  try {
-    await axios.post(
-      `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,
-      {
-        chat_id: TG_CHAT_ID,
-        text: msg,
-        parse_mode: "HTML"
-      }
-    );
-  } catch (e) {
-    console.error("Erro Telegram:", e.message);
-  }
-}
-
-/* CRIAR PIX */
+/* 1️⃣ CRIAR PIX */
 app.post("/pix", async (req, res) => {
   try {
-    const { valor, descricao, email, dadosCompra } = req.body;
+    const { valor, descricao, email } = req.body;
 
-    if (!valor || !email || !dadosCompra) {
+    if (!valor || !email) {
       return res.status(400).json({ erro: "Dados inválidos" });
     }
 
@@ -53,13 +33,13 @@ app.post("/pix", async (req, res) => {
       "https://api.mercadopago.com/v1/payments",
       {
         transaction_amount: Number(valor),
-        description: descricao,
+        description: descricao || "Pagamento Pix",
         payment_method_id: "pix",
         payer: { email }
       },
       {
         headers: {
-          Authorization: `Bearer ${MP_TOKEN}`,
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
           "Content-Type": "application/json",
           "X-Idempotency-Key": `pix-${Date.now()}`
         }
@@ -73,42 +53,61 @@ app.post("/pix", async (req, res) => {
   }
 });
 
-/* STATUS + TELEGRAM */
+/* 2️⃣ CONSULTAR STATUS */
 app.get("/status/:id", async (req, res) => {
-  const { id } = req.params;
-
   try {
     const resposta = await axios.get(
-      `https://api.mercadopago.com/v1/payments/${id}`,
+      `https://api.mercadopago.com/v1/payments/${req.params.id}`,
       {
         headers: {
-          Authorization: `Bearer ${MP_TOKEN}`
+          Authorization: `Bearer ${ACCESS_TOKEN}`
         }
       }
     );
 
-    const status = resposta.data.status;
-    const info = resposta.data.description;
+    res.json({ status: resposta.data.status });
+  } catch {
+    res.json({ status: "aguardando" });
+  }
+});
 
-    /* NOTIFICA UMA ÚNICA VEZ */
-    if (status === "approved" && !pagamentosNotificados.has(id)) {
-      pagamentosNotificados.add(id);
+/* 3️⃣ NOTIFICAR TELEGRAM */
+app.post("/notify", async (req, res) => {
+  try {
+    const {
+      nome,
+      whatsapp,
+      produto,
+      valor,
+      tipo,
+      freefireId
+    } = req.body;
 
-      const msg = `
-<b>✅ PAGAMENTO APROVADO</b>
+    const mensagem = `
+🔥 *NOVA COMPRA APROVADA*
 
-🆔 <b>ID:</b> ${id}
-📦 <b>Descrição:</b> ${info}
-💰 <b>Valor:</b> R$ ${resposta.data.transaction_amount}
-
+📦 Produto: *${produto}*
+💰 Valor: *R$ ${valor.toFixed(2)}*
+👤 Nome: *${nome}*
+📞 WhatsApp: *${whatsapp}*
+🎮 ID FF: *${freefireId || "BR MOD"}*
+🧩 Tipo: *${tipo}*
 🕒 ${new Date().toLocaleString("pt-BR")}
 `;
-      enviarTelegram(msg);
-    }
 
-    res.json({ status });
-  } catch (err) {
-    res.json({ status: "aguardando" });
+    await axios.post(
+      `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
+      {
+        chat_id: TELEGRAM_CHAT_ID,
+        text: mensagem,
+        parse_mode: "Markdown"
+      }
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("ERRO TELEGRAM:", e.message);
+    res.status(500).json({ erro: "Erro Telegram" });
   }
 });
 
