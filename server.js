@@ -66,7 +66,7 @@ app.get("/status/:id", async (req, res) => {
     res.json({ status: resposta.data.status });
   } catch (err) {
     console.error("ERRO STATUS:", err.message);
-    res.json({ status: "pendente" });
+    res.json({ status: "aguardando" });
   }
 });
 
