@@ -1,26 +1,29 @@
+
 import express from "express";
 import axios from "axios";
 import cors from "cors";
 
 const app = express();
 
-/* CONFIG */
+/* ================= CONFIG ================= */
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-// 🔴 TELEGRAM
-const TELEGRAM_TOKEN = process.env.TG_TOKEN; // ex: 123456:ABC...
-const TELEGRAM_CHAT_ID = process.env.TG_CHAT_ID; // ex: 123456789
+// Mercado Pago
+const MP_TOKEN = process.env.MP_TOKEN;
 
-/* TESTE */
+// Telegram
+const TG_TOKEN = process.env.TG_TOKEN;
+const TG_CHAT_ID = process.env.TG_CHAT_ID;
+
+/* ================= TESTE ================= */
 app.get("/", (req, res) => {
-  res.send("API Pix online 🚀");
+  res.send("✅ API Pix + Telegram online");
 });
 
-/* 1️⃣ CRIAR PIX */
+/* ================= CRIAR PIX ================= */
 app.post("/pix", async (req, res) => {
   try {
     const { valor, descricao, email } = req.body;
@@ -39,7 +42,7 @@ app.post("/pix", async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
+          Authorization: `Bearer ${MP_TOKEN}`,
           "Content-Type": "application/json",
           "X-Idempotency-Key": `pix-${Date.now()}`
         }
@@ -48,12 +51,12 @@ app.post("/pix", async (req, res) => {
 
     res.json(pagamento.data);
   } catch (err) {
-    console.error("ERRO PIX:", err.response?.data || err.message);
+    console.error("❌ ERRO AO GERAR PIX:", err.response?.data || err.message);
     res.status(500).json({ erro: "Erro ao gerar Pix" });
   }
 });
 
-/* 2️⃣ CONSULTAR STATUS */
+/* ================= STATUS + TELEGRAM ================= */
 app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -62,52 +65,37 @@ app.get("/status/:id", async (req, res) => {
       `https://api.mercadopago.com/v1/payments/${id}`,
       {
         headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`
+          Authorization: `Bearer ${MP_TOKEN}`
         }
       }
     );
 
-    res.json({ status: resposta.data.status });
+    const status = resposta.data.status;
+
+    // 🔔 NOTIFICA TELEGRAM QUANDO APROVAR
+    if (status === "approved") {
+      await axios.post(
+        `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,
+        {
+          chat_id: TG_CHAT_ID,
+          text:
+`💰 PIX APROVADO!
+
+Um pagamento acabou de ser confirmado no site Sedutin.
+
+⏰ ${new Date().toLocaleString("pt-BR")}`
+        }
+      );
+    }
+
+    res.json({ status });
   } catch (err) {
-    console.error("ERRO STATUS:", err.message);
+    console.error("❌ ERRO STATUS:", err.message);
     res.json({ status: "pending" });
   }
 });
 
-/* 3️⃣ NOTIFICAR TELEGRAM 🔔 */
-app.post("/telegram", async (req, res) => {
-  try {
-    const { nome, produto, valor, whatsapp, freefireId, tipo } = req.body;
-
-    const mensagem = `
-💰 *PIX APROVADO*
-
-📦 Produto: *${produto}*
-💵 Valor: *R$ ${Number(valor).toFixed(2).replace(".", ",")}*
-👤 Nome: *${nome}*
-📞 WhatsApp: *${whatsapp}*
-🎮 Free Fire ID: *${freefireId || "BR MOD"}*
-🧾 Tipo: *${tipo}*
-⏰ ${new Date().toLocaleString("pt-BR")}
-`;
-
-    await axios.post(
-      `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
-      {
-        chat_id: TELEGRAM_CHAT_ID,
-        text: mensagem,
-        parse_mode: "Markdown"
-      }
-    );
-
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("ERRO TELEGRAM:", e.message);
-    res.status(500).json({ ok: false });
-  }
-});
-
-/* START */
+/* ================= START ================= */
 app.listen(PORT, () => {
-  console.log("Servidor rodando na porta " + PORT);
+  console.log("🚀 Servidor rodando na porta " + PORT);
 });
