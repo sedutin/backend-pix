@@ -14,26 +14,21 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 /* ================= CONTROLE ================= */
-// Pagamentos pendentes → serão verificados automaticamente
-const pagamentosPendentes = new Map(); 
-// Pagamentos já notificados
+// pagamentos pendentes de aprovação
+const pagamentosPendentes = new Map();
+// pagamentos já notificados
 const pagamentosNotificados = new Set();
 
 /* ================= TELEGRAM ================= */
 async function enviarTelegram(mensagem) {
-  try {
-    await axios.post(
-      `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
-      {
-        chat_id: TELEGRAM_CHAT_ID,
-        text: mensagem,
-        parse_mode: "HTML"
-      }
-    );
-    console.log("📩 Telegram enviado");
-  } catch (err) {
-    console.error("❌ ERRO TELEGRAM:", err.message);
-  }
+  await axios.post(
+    `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
+    {
+      chat_id: TELEGRAM_CHAT_ID,
+      text: mensagem,
+      parse_mode: "HTML"
+    }
+  );
 }
 
 /* ================= MERCADO PAGO ================= */
@@ -53,7 +48,7 @@ async function consultarPagamento(id) {
 setInterval(async () => {
   if (pagamentosPendentes.size === 0) return;
 
-  for (const [id, dadosBase] of pagamentosPendentes) {
+  for (const [id] of pagamentosPendentes) {
     try {
       const dados = await consultarPagamento(id);
 
@@ -64,9 +59,11 @@ setInterval(async () => {
         await enviarTelegram(
           `✅ <b>PAGAMENTO APROVADO</b>\n\n` +
           `💰 Valor: R$ ${dados.transaction_amount}\n` +
-          `📧 Email: ${dados.payer.email}\n` +
+          `📧 Email: ${dados.payer?.email || "-"}\n` +
           `🆔 ID: ${id}`
         );
+
+        console.log("📩 Telegram enviado:", id);
       }
 
       if (["rejected", "cancelled"].includes(dados.status)) {
@@ -74,14 +71,26 @@ setInterval(async () => {
       }
 
     } catch (err) {
-      console.error("❌ ERRO VERIFICAÇÃO:", err.message);
+      console.error("❌ Erro verificação:", err.message);
     }
   }
 }, 5000); // verifica a cada 5 segundos
 
 /* ================= ROTAS ================= */
+
+// teste servidor
 app.get("/", (req, res) => {
   res.send("API Pix online 🚀");
+});
+
+// 🔥 TESTE TELEGRAM
+app.get("/teste-telegram", async (req, res) => {
+  try {
+    await enviarTelegram("🚀 TESTE TELEGRAM OK");
+    res.send("Mensagem enviada para o Telegram");
+  } catch (err) {
+    res.status(500).send("Erro ao enviar Telegram");
+  }
 });
 
 /* ================= CRIAR PIX ================= */
@@ -112,13 +121,15 @@ app.post("/pix", async (req, res) => {
 
     const id = pagamento.data.id;
 
-    // 🔥 adiciona à fila de verificação automática
+    // adiciona à fila automática
     pagamentosPendentes.set(id, true);
+
+    console.log("🆕 Pix criado:", id);
 
     res.json(pagamento.data);
 
   } catch (err) {
-    console.error("❌ ERRO PIX:", err.response?.data || err.message);
+    console.error("❌ Erro PIX:", err.response?.data || err.message);
     res.status(500).json({ erro: "Erro ao gerar Pix" });
   }
 });
@@ -136,5 +147,5 @@ app.get("/status/:id", async (req, res) => {
 /* ================= START ================= */
 app.listen(PORT, () => {
   console.log("🚀 Servidor rodando na porta " + PORT);
-  console.log("🔁 Verificador automático de pagamentos ATIVO");
+  console.log("🔁 Verificador automático ATIVO");
 });
