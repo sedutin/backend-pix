@@ -1,7 +1,9 @@
 import admin from "firebase-admin";
 import axios from "axios";
 
-/* ================= VARIÁVEIS DE AMBIENTE ================= */
+/* =========================
+   ENV (Render)
+========================= */
 const {
   TELEGRAM_TOKEN,
   TELEGRAM_CHAT_ID,
@@ -11,7 +13,9 @@ const {
   FIREBASE_DATABASE_URL
 } = process.env;
 
-/* ================= FIREBASE INIT ================= */
+/* =========================
+   FIREBASE ADMIN
+========================= */
 admin.initializeApp({
   credential: admin.credential.cert({
     projectId: FIREBASE_PROJECT_ID,
@@ -23,51 +27,52 @@ admin.initializeApp({
 
 const db = admin.database();
 
-/* ================= TELEGRAM ================= */
-async function enviarTelegram(mensagem) {
-  await axios.post(
-    `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
-    {
-      chat_id: TELEGRAM_CHAT_ID,
-      text: mensagem,
-      parse_mode: "HTML"
-    }
-  );
-}
+console.log("🔥 Listener Firebase → Telegram iniciado");
 
-/* ================= LISTENER COMPRAS ================= */
-const comprasRef = db.ref("compras");
+/* =========================
+   FUNÇÃO TELEGRAM
+========================= */
+async function enviarTelegram(compra) {
+  const mensagem = `
+🛒 *NOVA COMPRA APROVADA*
 
-comprasRef.on("child_added", async (snapshot) => {
-  const id = snapshot.key;
-  const c = snapshot.val();
-
-  if (!c) return;
-
-  // 🛑 Já notificado
-  if (c.telegram_notificado === true) return;
-
-  const mensagem =
-    `🛒 <b>NOVA COMPRA CONFIRMADA</b>\n\n` +
-    `📦 Produto: ${c.produto || "-"}\n` +
-    `👤 Nome: ${c.nome || "-"}\n` +
-    `📞 WhatsApp: ${c.whatsapp || "-"}\n` +
-    `🎮 Free Fire ID: ${c.freefireId || "-"}\n` +
-    `🕒 Data: ${
-      c.data ? new Date(c.data).toLocaleString("pt-BR") : "-"
-    }\n` +
-    `🆔 ID: ${id}`;
+📦 Produto: ${compra.produto || "-"}
+👤 Nome: ${compra.nome || "-"}
+📞 WhatsApp: ${compra.whatsapp || "-"}
+🎮 ID FF: ${compra.freefireId || "-"}
+💰 Valor: ${compra.valor || "-"}
+🕒 Data: ${new Date(compra.data || Date.now()).toLocaleString("pt-BR")}
+`;
 
   try {
-    await enviarTelegram(mensagem);
+    await axios.post(
+      `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
+      {
+        chat_id: TELEGRAM_CHAT_ID,
+        text: mensagem,
+        parse_mode: "Markdown"
+      }
+    );
 
-    // ✅ Marca como notificado (anti-duplicado definitivo)
-    await db.ref(`compras/${id}/telegram_notificado`).set(true);
-
-    console.log("✅ Telegram enviado:", id);
+    console.log("📩 Telegram enviado");
   } catch (err) {
-    console.error("❌ Erro ao enviar Telegram:", err.message);
+    console.error("❌ Erro Telegram:", err.message);
   }
-});
+}
 
-console.log("🔥 Firebase → Telegram ativo");
+/* =========================
+   LISTENER REALTIME DATABASE
+========================= */
+const comprasRef = db.ref("compras");
+
+comprasRef.on("child_added", snapshot => {
+  const compra = snapshot.val();
+
+  // evita enviar compras antigas ao iniciar
+  if (!compra || compra.notificado) return;
+
+  enviarTelegram(compra);
+
+  // marca como notificado
+  snapshot.ref.update({ notificado: true });
+});
