@@ -1,10 +1,6 @@
 import express from "express";
 import axios from "axios";
 import cors from "cors";
-import dotenv from "dotenv";
-
-// Carregar variáveis de ambiente
-dotenv.config();
 
 const app = express();
 
@@ -14,8 +10,10 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;  // Token do bot do Telegram
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;  // ID do chat do Telegram
+
+// 🔴 TELEGRAM
+const TELEGRAM_TOKEN = process.env.TG_TOKEN; // ex: 123456:ABC...
+const TELEGRAM_CHAT_ID = process.env.TG_CHAT_ID; // ex: 123456789
 
 /* TESTE */
 app.get("/", (req, res) => {
@@ -55,13 +53,11 @@ app.post("/pix", async (req, res) => {
   }
 });
 
-/* 2️⃣ CONSULTAR STATUS (🔥 SOLUÇÃO DEFINITIVA 🔥) */
+/* 2️⃣ CONSULTAR STATUS */
 app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    console.log(`Consultando o status do pagamento com ID: ${id}`); // Log para depuração
-    
     const resposta = await axios.get(
       `https://api.mercadopago.com/v1/payments/${id}`,
       {
@@ -71,43 +67,45 @@ app.get("/status/:id", async (req, res) => {
       }
     );
 
-    const paymentStatus = resposta.data.status;
-    console.log(`Status do pagamento: ${paymentStatus}`); // Log do status
-
-    if (paymentStatus === 'approved') {
-      // Se o pagamento foi aprovado, enviar notificação no Telegram
-      await enviarNotificacaoTelegram(id, paymentStatus);
-    }
-
-    res.json({ status: paymentStatus });
+    res.json({ status: resposta.data.status });
   } catch (err) {
     console.error("ERRO STATUS:", err.message);
     res.json({ status: "pending" });
   }
 });
 
-/* ENVIAR NOTIFICAÇÃO PARA TELEGRAM */
-async function enviarNotificacaoTelegram(paymentId, paymentStatus) {
+/* 3️⃣ NOTIFICAR TELEGRAM 🔔 */
+app.post("/telegram", async (req, res) => {
   try {
-    // Log para verificar os dados antes de enviar a mensagem
-    console.log(`Enviando notificação para Telegram... PaymentId: ${paymentId}, Status: ${paymentStatus}`);
-    
-    const mensagem = `✅ Pagamento aprovado! ID do pagamento: ${paymentId}, Status: ${paymentStatus}`;
-    
-    const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
-    const params = {
-      chat_id: TELEGRAM_CHAT_ID,
-      text: mensagem,
-    };
+    const { nome, produto, valor, whatsapp, freefireId, tipo } = req.body;
 
-    // Enviar a mensagem para o Telegram
-    const resposta = await axios.post(url, params);
+    const mensagem = `
+💰 *PIX APROVADO*
 
-    console.log("Notificação enviada para o Telegram:", resposta.data); // Log para verificar se a resposta foi bem-sucedida
-  } catch (err) {
-    console.error("Erro ao enviar notificação no Telegram:", err.message);
+📦 Produto: *${produto}*
+💵 Valor: *R$ ${Number(valor).toFixed(2).replace(".", ",")}*
+👤 Nome: *${nome}*
+📞 WhatsApp: *${whatsapp}*
+🎮 Free Fire ID: *${freefireId || "BR MOD"}*
+🧾 Tipo: *${tipo}*
+⏰ ${new Date().toLocaleString("pt-BR")}
+`;
+
+    await axios.post(
+      `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
+      {
+        chat_id: TELEGRAM_CHAT_ID,
+        text: mensagem,
+        parse_mode: "Markdown"
+      }
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("ERRO TELEGRAM:", e.message);
+    res.status(500).json({ ok: false });
   }
-}
+});
 
 /* START */
 app.listen(PORT, () => {
