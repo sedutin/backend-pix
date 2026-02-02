@@ -9,9 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-
-// Mercado Pago
-const MP_TOKEN = process.env.MP_TOKEN;
+const ACCESS_TOKEN = process.env.MP_TOKEN;
 
 // Telegram
 const TG_TOKEN = process.env.TG_TOKEN;
@@ -19,7 +17,7 @@ const TG_CHAT_ID = process.env.TG_CHAT_ID;
 
 /* ================= TESTE ================= */
 app.get("/", (req, res) => {
-  res.send("✅ API Pix + Telegram online");
+  res.send("API Pix online 🚀");
 });
 
 /* ================= CRIAR PIX ================= */
@@ -41,7 +39,7 @@ app.post("/pix", async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${MP_TOKEN}`,
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
           "Content-Type": "application/json",
           "X-Idempotency-Key": `pix-${Date.now()}`
         }
@@ -55,18 +53,18 @@ app.post("/pix", async (req, res) => {
   }
 });
 
-/* ================= STATUS + TELEGRAM ================= */
+/* ================= STATUS + VERIFICAÇÃO + TELEGRAM ================= */
 app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Aqui, fazemos a verificação do status do pagamento
+    // Função para verificar o status do pagamento
     const verificarPagamento = async (id) => {
       const resposta = await axios.get(
         `https://api.mercadopago.com/v1/payments/${id}`,
         {
           headers: {
-            Authorization: `Bearer ${MP_TOKEN}`
+            Authorization: `Bearer ${ACCESS_TOKEN}`
           }
         }
       );
@@ -74,6 +72,7 @@ app.get("/status/:id", async (req, res) => {
       return resposta.data.status;
     };
 
+    // Verificar o status do pagamento
     let status = await verificarPagamento(id);
     
     // Loop para verificar o status até ele ser aprovado ou expirar
