@@ -1,4 +1,5 @@
 import express from "express";
+import './monitorCompra.js';
 import axios from "axios";
 import cors from "cors";
 
