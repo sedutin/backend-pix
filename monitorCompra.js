@@ -18,8 +18,8 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 // Defina o token do Telegram e o chat ID
-const TELEGRAM_TOKEN = 'seu_token_telegram_aqui';  // Substitua com o seu token do Telegram
-const CHAT_ID = 'seu_chat_id_telegram_aqui';      // Substitua com o seu chat ID do Telegram
+const TELEGRAM_TOKEN = '8321916744:AAEdSuWLhrS0kkAKgxjI2_GqtnoSaETzENY';  // Substitua com o seu token do Telegram
+const CHAT_ID = '8321599291';      // Substitua com o seu chat ID do Telegram
 
 // Função para enviar mensagem para o Telegram
 async function enviarMensagemTelegram(mensagem) {
