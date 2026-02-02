@@ -1,6 +1,10 @@
 import express from "express";
 import axios from "axios";
 import cors from "cors";
+import dotenv from "dotenv";
+
+// Carregar as variáveis de ambiente
+dotenv.config();
 
 const app = express();
 
@@ -10,6 +14,8 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;  // Token do bot do Telegram
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;  // ID do chat do Telegram
 
 /* TESTE */
 app.get("/", (req, res) => {
@@ -63,12 +69,37 @@ app.get("/status/:id", async (req, res) => {
       }
     );
 
-    res.json({ status: resposta.data.status });
+    const paymentStatus = resposta.data.status;
+    
+    if (paymentStatus === 'approved') {
+      // Enviar notificação no Telegram
+      await enviarNotificacaoTelegram(id);
+    }
+
+    res.json({ status: paymentStatus });
   } catch (err) {
     console.error("ERRO STATUS:", err.message);
     res.json({ status: "pending" });
   }
 });
+
+/* ENVIAR NOTIFICAÇÃO PARA TELEGRAM */
+async function enviarNotificacaoTelegram(paymentId) {
+  try {
+    const mensagem = `✅ Pagamento aprovado! ID do pagamento: ${paymentId}`;
+    
+    const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+    const params = {
+      chat_id: TELEGRAM_CHAT_ID,
+      text: mensagem,
+    };
+
+    await axios.post(url, params);
+    console.log("Notificação enviada para o Telegram");
+  } catch (err) {
+    console.error("Erro ao enviar notificação no Telegram:", err.message);
+  }
+}
 
 /* START */
 app.listen(PORT, () => {
