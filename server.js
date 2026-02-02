@@ -3,7 +3,7 @@ import axios from "axios";
 import cors from "cors";
 import dotenv from "dotenv";
 
-// Carregar as variáveis de ambiente
+// Carregar variáveis de ambiente
 dotenv.config();
 
 const app = express();
@@ -60,6 +60,8 @@ app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
+    console.log(`Consultando o status do pagamento com ID: ${id}`); // Log para depuração
+    
     const resposta = await axios.get(
       `https://api.mercadopago.com/v1/payments/${id}`,
       {
@@ -70,10 +72,11 @@ app.get("/status/:id", async (req, res) => {
     );
 
     const paymentStatus = resposta.data.status;
-    
+    console.log(`Status do pagamento: ${paymentStatus}`); // Log do status
+
     if (paymentStatus === 'approved') {
-      // Enviar notificação no Telegram
-      await enviarNotificacaoTelegram(id);
+      // Se o pagamento foi aprovado, enviar notificação no Telegram
+      await enviarNotificacaoTelegram(id, paymentStatus);
     }
 
     res.json({ status: paymentStatus });
@@ -84,9 +87,12 @@ app.get("/status/:id", async (req, res) => {
 });
 
 /* ENVIAR NOTIFICAÇÃO PARA TELEGRAM */
-async function enviarNotificacaoTelegram(paymentId) {
+async function enviarNotificacaoTelegram(paymentId, paymentStatus) {
   try {
-    const mensagem = `✅ Pagamento aprovado! ID do pagamento: ${paymentId}`;
+    // Log para verificar os dados antes de enviar a mensagem
+    console.log(`Enviando notificação para Telegram... PaymentId: ${paymentId}, Status: ${paymentStatus}`);
+    
+    const mensagem = `✅ Pagamento aprovado! ID do pagamento: ${paymentId}, Status: ${paymentStatus}`;
     
     const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
     const params = {
@@ -94,8 +100,10 @@ async function enviarNotificacaoTelegram(paymentId) {
       text: mensagem,
     };
 
-    await axios.post(url, params);
-    console.log("Notificação enviada para o Telegram");
+    // Enviar a mensagem para o Telegram
+    const resposta = await axios.post(url, params);
+
+    console.log("Notificação enviada para o Telegram:", resposta.data); // Log para verificar se a resposta foi bem-sucedida
   } catch (err) {
     console.error("Erro ao enviar notificação no Telegram:", err.message);
   }
