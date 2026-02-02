@@ -13,87 +13,23 @@ const ACCESS_TOKEN = process.env.MP_TOKEN;
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-/* ================= CONTROLE ================= */
-// pagamentos pendentes de aprovação
-const pagamentosPendentes = new Map();
-// pagamentos já notificados
-const pagamentosNotificados = new Set();
-
-/* ================= TELEGRAM ================= */
-async function enviarTelegram(mensagem) {
-  await axios.post(
-    `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
-    {
-      chat_id: TELEGRAM_CHAT_ID,
-      text: mensagem,
-      parse_mode: "HTML"
-    }
-  );
-}
-
-/* ================= MERCADO PAGO ================= */
-async function consultarPagamento(id) {
-  const r = await axios.get(
-    `https://api.mercadopago.com/v1/payments/${id}`,
-    {
-      headers: {
-        Authorization: `Bearer ${ACCESS_TOKEN}`
-      }
-    }
-  );
-  return r.data;
-}
-
-/* ================= VERIFICADOR AUTOMÁTICO ================= */
-setInterval(async () => {
-  if (pagamentosPendentes.size === 0) return;
-
-  for (const [id] of pagamentosPendentes) {
-    try {
-      const dados = await consultarPagamento(id);
-
-      if (dados.status === "approved" && !pagamentosNotificados.has(id)) {
-        pagamentosNotificados.add(id);
-        pagamentosPendentes.delete(id);
-
-        await enviarTelegram(
-          `✅ <b>PAGAMENTO APROVADO</b>\n\n` +
-          `💰 Valor: R$ ${dados.transaction_amount}\n` +
-          `📧 Email: ${dados.payer?.email || "-"}\n` +
-          `🆔 ID: ${id}`
-        );
-
-        console.log("📩 Telegram enviado:", id);
-      }
-
-      if (["rejected", "cancelled"].includes(dados.status)) {
-        pagamentosPendentes.delete(id);
-      }
-
-    } catch (err) {
-      console.error("❌ Erro verificação:", err.message);
-    }
-  }
-}, 5000); // verifica a cada 5 segundos
-
-/* ================= ROTAS ================= */
-
-// teste servidor
+/* ================= TESTE ================= */
 app.get("/", (req, res) => {
-  res.send("API Pix online 🚀");
+  res.send("API Pix + Telegram online 🚀");
 });
 
-// 🔥 TESTE TELEGRAM
-app.get("/teste-telegram", async (req, res) => {
-  try {
-    await enviarTelegram("🚀 TESTE TELEGRAM OK");
-    res.send("Mensagem enviada para o Telegram");
-  } catch (err) {
-    res.status(500).send("Erro ao enviar Telegram");
-  }
-});
+/* ================= FUNÇÃO TELEGRAM ================= */
+async function enviarTelegram(mensagem) {
+  const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
 
-/* ================= CRIAR PIX ================= */
+  await axios.post(url, {
+    chat_id: TELEGRAM_CHAT_ID,
+    text: mensagem,
+    parse_mode: "HTML"
+  });
+}
+
+/* ================= 1️⃣ CRIAR PIX ================= */
 app.post("/pix", async (req, res) => {
   try {
     const { valor, descricao, email } = req.body;
@@ -119,33 +55,67 @@ app.post("/pix", async (req, res) => {
       }
     );
 
-    const id = pagamento.data.id;
-
-    // adiciona à fila automática
-    pagamentosPendentes.set(id, true);
-
-    console.log("🆕 Pix criado:", id);
-
     res.json(pagamento.data);
-
   } catch (err) {
-    console.error("❌ Erro PIX:", err.response?.data || err.message);
+    console.error("ERRO PIX:", err.response?.data || err.message);
     res.status(500).json({ erro: "Erro ao gerar Pix" });
   }
 });
 
-/* ================= STATUS (OPCIONAL) ================= */
+/* ================= 2️⃣ STATUS PIX ================= */
 app.get("/status/:id", async (req, res) => {
   try {
-    const dados = await consultarPagamento(req.params.id);
-    res.json({ status: dados.status });
-  } catch {
+    const resposta = await axios.get(
+      `https://api.mercadopago.com/v1/payments/${req.params.id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`
+        }
+      }
+    );
+
+    res.json({ status: resposta.data.status });
+  } catch (err) {
+    console.error("ERRO STATUS:", err.message);
     res.json({ status: "pending" });
+  }
+});
+
+/* ================= 3️⃣ CONFIRMAR PAGAMENTO + TELEGRAM ================= */
+app.post("/confirmar-pagamento", async (req, res) => {
+  try {
+    const {
+      nome,
+      whatsapp,
+      freefireId,
+      produto,
+      valor,
+      tipo
+    } = req.body;
+
+    const mensagem = `
+💰 <b>PAGAMENTO APROVADO</b>
+
+📦 <b>Produto:</b> ${produto}
+💵 <b>Valor:</b> R$ ${Number(valor).toFixed(2).replace(".", ",")}
+
+👤 <b>Nome:</b> ${nome}
+📞 <b>WhatsApp:</b> ${whatsapp}
+🎮 <b>ID FF:</b> ${freefireId || "BR MOD"}
+
+🕒 <b>Data:</b> ${new Date().toLocaleString("pt-BR")}
+    `;
+
+    await enviarTelegram(mensagem);
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("ERRO TELEGRAM:", e.message);
+    res.status(500).json({ erro: "Erro ao enviar Telegram" });
   }
 });
 
 /* ================= START ================= */
 app.listen(PORT, () => {
-  console.log("🚀 Servidor rodando na porta " + PORT);
-  console.log("🔁 Verificador automático ATIVO");
+  console.log("Servidor rodando na porta " + PORT);
 });
