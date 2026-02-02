@@ -1,4 +1,3 @@
-
 import express from "express";
 import axios from "axios";
 import cors from "cors";
@@ -61,18 +60,35 @@ app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    const resposta = await axios.get(
-      `https://api.mercadopago.com/v1/payments/${id}`,
-      {
-        headers: {
-          Authorization: `Bearer ${MP_TOKEN}`
+    // Aqui, fazemos a verificação do status do pagamento
+    const verificarPagamento = async (id) => {
+      const resposta = await axios.get(
+        `https://api.mercadopago.com/v1/payments/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${MP_TOKEN}`
+          }
         }
-      }
-    );
+      );
 
-    const status = resposta.data.status;
+      return resposta.data.status;
+    };
 
-    // 🔔 NOTIFICA TELEGRAM QUANDO APROVAR
+    let status = await verificarPagamento(id);
+    
+    // Loop para verificar o status até ele ser aprovado ou expirar
+    let attempts = 0;
+    const maxAttempts = 10; // Máximo de tentativas
+    const delay = 3000; // Esperar 3 segundos entre cada tentativa
+
+    while (status !== "approved" && attempts < maxAttempts) {
+      attempts++;
+      console.log(`Tentativa ${attempts}: status atual - ${status}`);
+      await new Promise(resolve => setTimeout(resolve, delay)); // Espera de 3 segundos
+      status = await verificarPagamento(id);
+    }
+
+    // Se o pagamento foi aprovado, notificar no Telegram
     if (status === "approved") {
       await axios.post(
         `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,
@@ -81,7 +97,7 @@ app.get("/status/:id", async (req, res) => {
           text:
 `💰 PIX APROVADO!
 
-Um pagamento acabou de ser confirmado no site Sedutin.
+Um pagamento foi confirmado no site Sedutin.
 
 ⏰ ${new Date().toLocaleString("pt-BR")}`
         }
