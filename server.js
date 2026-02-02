@@ -5,32 +5,19 @@ import cors from "cors";
 
 const app = express();
 
-/* ================= CONFIG ================= */
+/* CONFIG */
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-/* ================= TESTE ================= */
+/* TESTE */
 app.get("/", (req, res) => {
-  res.send("API Pix + Telegram online 🚀");
+  res.send("API Pix online 🚀");
 });
 
-/* ================= FUNÇÃO TELEGRAM ================= */
-async function enviarTelegram(mensagem) {
-  const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
-
-  await axios.post(url, {
-    chat_id: TELEGRAM_CHAT_ID,
-    text: mensagem,
-    parse_mode: "HTML"
-  });
-}
-
-/* ================= 1️⃣ CRIAR PIX ================= */
+/* 1️⃣ CRIAR PIX */
 app.post("/pix", async (req, res) => {
   try {
     const { valor, descricao, email } = req.body;
@@ -63,11 +50,13 @@ app.post("/pix", async (req, res) => {
   }
 });
 
-/* ================= 2️⃣ STATUS PIX ================= */
+/* 2️⃣ CONSULTAR STATUS (🔥 SOLUÇÃO DEFINITIVA 🔥) */
 app.get("/status/:id", async (req, res) => {
+  const { id } = req.params;
+
   try {
     const resposta = await axios.get(
-      `https://api.mercadopago.com/v1/payments/${req.params.id}`,
+      `https://api.mercadopago.com/v1/payments/${id}`,
       {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`
@@ -82,41 +71,7 @@ app.get("/status/:id", async (req, res) => {
   }
 });
 
-/* ================= 3️⃣ CONFIRMAR PAGAMENTO + TELEGRAM ================= */
-app.post("/confirmar-pagamento", async (req, res) => {
-  try {
-    const {
-      nome,
-      whatsapp,
-      freefireId,
-      produto,
-      valor,
-      tipo
-    } = req.body;
-
-    const mensagem = `
-💰 <b>PAGAMENTO APROVADO</b>
-
-📦 <b>Produto:</b> ${produto}
-💵 <b>Valor:</b> R$ ${Number(valor).toFixed(2).replace(".", ",")}
-
-👤 <b>Nome:</b> ${nome}
-📞 <b>WhatsApp:</b> ${whatsapp}
-🎮 <b>ID FF:</b> ${freefireId || "BR MOD"}
-
-🕒 <b>Data:</b> ${new Date().toLocaleString("pt-BR")}
-    `;
-
-    await enviarTelegram(mensagem);
-
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("ERRO TELEGRAM:", e.message);
-    res.status(500).json({ erro: "Erro ao enviar Telegram" });
-  }
-});
-
-/* ================= START ================= */
+/* START */
 app.listen(PORT, () => {
   console.log("Servidor rodando na porta " + PORT);
 });
