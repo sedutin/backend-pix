@@ -10,17 +10,35 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const ACCESS_TOKEN = process.env.MP_TOKEN;
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Telegram
-const TG_TOKEN = process.env.TG_TOKEN;
-const TG_CHAT_ID = process.env.TG_CHAT_ID;
+/* ================= CONTROLE ANTI-DUPLICADO ================= */
+// Guarda os pagamentos que já enviaram notificação
+const pagamentosNotificados = new Set();
+
+/* ================= TELEGRAM ================= */
+async function enviarTelegram(mensagem) {
+  try {
+    await axios.post(
+      `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
+      {
+        chat_id: TELEGRAM_CHAT_ID,
+        text: mensagem,
+        parse_mode: "HTML"
+      }
+    );
+  } catch (err) {
+    console.error("ERRO TELEGRAM:", err.message);
+  }
+}
 
 /* ================= TESTE ================= */
 app.get("/", (req, res) => {
   res.send("API Pix online 🚀");
 });
 
-/* ================= CRIAR PIX ================= */
+/* ================= 1️⃣ CRIAR PIX ================= */
 app.post("/pix", async (req, res) => {
   try {
     const { valor, descricao, email } = req.body;
@@ -48,69 +66,48 @@ app.post("/pix", async (req, res) => {
 
     res.json(pagamento.data);
   } catch (err) {
-    console.error("❌ ERRO AO GERAR PIX:", err.response?.data || err.message);
+    console.error("ERRO PIX:", err.response?.data || err.message);
     res.status(500).json({ erro: "Erro ao gerar Pix" });
   }
 });
 
-/* ================= STATUS + VERIFICAÇÃO + TELEGRAM ================= */
+/* ================= 2️⃣ CONSULTAR STATUS + TELEGRAM ================= */
 app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Função para verificar o status do pagamento
-    const verificarPagamento = async (id) => {
-      const resposta = await axios.get(
-        `https://api.mercadopago.com/v1/payments/${id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${ACCESS_TOKEN}`
-          }
+    const resposta = await axios.get(
+      `https://api.mercadopago.com/v1/payments/${id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`
         }
-      );
+      }
+    );
 
-      return resposta.data.status;
-    };
+    const dados = resposta.data;
+    const status = dados.status;
 
-    // Verificar o status do pagamento
-    let status = await verificarPagamento(id);
-    
-    // Loop para verificar o status até ele ser aprovado ou expirar
-    let attempts = 0;
-    const maxAttempts = 10; // Máximo de tentativas
-    const delay = 3000; // Esperar 3 segundos entre cada tentativa
+    // 🔥 Envia Telegram SOMENTE UMA VEZ
+    if (status === "approved" && !pagamentosNotificados.has(id)) {
+      pagamentosNotificados.add(id);
 
-    while (status !== "approved" && attempts < maxAttempts) {
-      attempts++;
-      console.log(`Tentativa ${attempts}: status atual - ${status}`);
-      await new Promise(resolve => setTimeout(resolve, delay)); // Espera de 3 segundos
-      status = await verificarPagamento(id);
-    }
-
-    // Se o pagamento foi aprovado, notificar no Telegram
-    if (status === "approved") {
-      await axios.post(
-        `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,
-        {
-          chat_id: TG_CHAT_ID,
-          text:
-`💰 PIX APROVADO!
-
-Um pagamento foi confirmado no site Sedutin.
-
-⏰ ${new Date().toLocaleString("pt-BR")}`
-        }
+      await enviarTelegram(
+        `✅ <b>PAGAMENTO APROVADO</b>\n\n` +
+        `💰 Valor: R$ ${dados.transaction_amount}\n` +
+        `📧 Email: ${dados.payer.email}\n` +
+        `🆔 ID: ${id}`
       );
     }
 
     res.json({ status });
   } catch (err) {
-    console.error("❌ ERRO STATUS:", err.message);
+    console.error("ERRO STATUS:", err.message);
     res.json({ status: "pending" });
   }
 });
 
 /* ================= START ================= */
 app.listen(PORT, () => {
-  console.log("🚀 Servidor rodando na porta " + PORT);
+  console.log("Servidor rodando na porta " + PORT);
 });
