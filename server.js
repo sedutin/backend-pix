@@ -4,16 +4,18 @@ import cors from "cors";
 
 const app = express();
 
-/* CONFIG */
+/* CONFIG BÁSICA */
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
+
+// Mercado Pago
 const ACCESS_TOKEN = process.env.MP_TOKEN;
 
-// 🔴 TELEGRAM
-const TELEGRAM_TOKEN = process.env.TG_TOKEN; // ex: 123456:ABC...
-const TELEGRAM_CHAT_ID = process.env.TG_CHAT_ID; // ex: 123456789
+// Telegram
+const TELEGRAM_TOKEN = process.env.TG_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TG_CHAT_ID;
 
 /* TESTE */
 app.get("/", (req, res) => {
@@ -53,7 +55,7 @@ app.post("/pix", async (req, res) => {
   }
 });
 
-/* 2️⃣ CONSULTAR STATUS */
+/* 2️⃣ CONSULTAR STATUS + NOTIFICAR TELEGRAM */
 app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -67,43 +69,23 @@ app.get("/status/:id", async (req, res) => {
       }
     );
 
-    res.json({ status: resposta.data.status });
+    const status = resposta.data.status;
+
+    // 🔔 NOTIFICA TELEGRAM QUANDO APROVAR
+    if (status === "approved") {
+      await axios.post(
+        `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
+        {
+          chat_id: TELEGRAM_CHAT_ID,
+          text: "💰 PIX APROVADO!\n\nUm pagamento foi confirmado no site Sedutin."
+        }
+      );
+    }
+
+    res.json({ status });
   } catch (err) {
     console.error("ERRO STATUS:", err.message);
     res.json({ status: "pending" });
-  }
-});
-
-/* 3️⃣ NOTIFICAR TELEGRAM 🔔 */
-app.post("/telegram", async (req, res) => {
-  try {
-    const { nome, produto, valor, whatsapp, freefireId, tipo } = req.body;
-
-    const mensagem = `
-💰 *PIX APROVADO*
-
-📦 Produto: *${produto}*
-💵 Valor: *R$ ${Number(valor).toFixed(2).replace(".", ",")}*
-👤 Nome: *${nome}*
-📞 WhatsApp: *${whatsapp}*
-🎮 Free Fire ID: *${freefireId || "BR MOD"}*
-🧾 Tipo: *${tipo}*
-⏰ ${new Date().toLocaleString("pt-BR")}
-`;
-
-    await axios.post(
-      `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
-      {
-        chat_id: TELEGRAM_CHAT_ID,
-        text: mensagem,
-        parse_mode: "Markdown"
-      }
-    );
-
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("ERRO TELEGRAM:", e.message);
-    res.status(500).json({ ok: false });
   }
 });
 
