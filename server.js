@@ -4,6 +4,7 @@ import cors from "cors";
 
 const app = express();
 
+/* CONFIG */
 app.use(cors());
 app.use(express.json());
 
@@ -12,44 +13,25 @@ const ACCESS_TOKEN = process.env.MP_TOKEN;
 
 /* TESTE */
 app.get("/", (req, res) => {
-  res.json({
-    online: true,
-    empresa: "SEDUTIN VENDAS"
-  });
+  res.send("API Pix online 🚀");
 });
 
-/* CRIAR PIX */
+/* 1️⃣ CRIAR PIX */
 app.post("/pix", async (req, res) => {
   try {
     const { valor, descricao, email } = req.body;
 
-    const valorNumerico = Number(valor);
-
-    if (
-      !Number.isFinite(valorNumerico) ||
-      valorNumerico <= 0 ||
-      !email
-    ) {
-      return res.status(400).json({
-        erro: "Valor ou e-mail inválido"
-      });
-    }
-
-    if (!ACCESS_TOKEN) {
-      return res.status(500).json({
-        erro: "MP_TOKEN não configurado no servidor"
-      });
+    if (!valor || !email) {
+      return res.status(400).json({ erro: "Dados inválidos" });
     }
 
     const pagamento = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
-        transaction_amount: valorNumerico,
+        transaction_amount: Number(valor),
         description: descricao || "Pagamento Pix",
         payment_method_id: "pix",
-        payer: {
-          email
-        }
+        payer: { email }
       },
       {
         headers: {
@@ -60,32 +42,14 @@ app.post("/pix", async (req, res) => {
       }
     );
 
-    const pix =
-      pagamento.data.point_of_interaction
-        ?.transaction_data;
-
-    res.json({
-      id: pagamento.data.id,
-      status: pagamento.data.status,
-      qr_code: pix?.qr_code,
-      qr_code_base64: pix?.qr_code_base64,
-      ticket_url: pix?.ticket_url
-    });
-
+    res.json(pagamento.data);
   } catch (err) {
-    console.error(
-      "ERRO PIX:",
-      err.response?.data || err.message
-    );
-
-    res.status(500).json({
-      erro: "Erro ao gerar Pix",
-      detalhes: err.response?.data || null
-    });
+    console.error("ERRO PIX:", err.response?.data || err.message);
+    res.status(500).json({ erro: "Erro ao gerar Pix" });
   }
 });
 
-/* CONSULTAR STATUS */
+/* 2️⃣ CONSULTAR STATUS (🔥 SOLUÇÃO DEFINITIVA 🔥) */
 app.get("/status/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -99,25 +63,14 @@ app.get("/status/:id", async (req, res) => {
       }
     );
 
-    res.json({
-      status: resposta.data.status
-    });
-
+    res.json({ status: resposta.data.status });
   } catch (err) {
-    console.error(
-      "ERRO STATUS:",
-      err.response?.data || err.message
-    );
-
-    res.status(500).json({
-      status: "pending"
-    });
+    console.error("ERRO STATUS:", err.message);
+    res.json({ status: "pending" });
   }
 });
 
 /* START */
 app.listen(PORT, () => {
-  console.log(
-    `SEDUTIN VENDAS - API Pix rodando na porta ${PORT}`
-  );
+  console.log("Servidor rodando na porta " + PORT);
 });
