@@ -4,6 +4,7 @@ import cors from "cors";
 
 const app = express();
 
+/* CONFIG */
 app.use(cors());
 app.use(express.json());
 
@@ -12,83 +13,49 @@ const ACCESS_TOKEN = process.env.MP_TOKEN;
 
 /* TESTE */
 app.get("/", (req, res) => {
-  res.json({
-    online: true,
-    empresa: "SEDUTIN VENDAS"
-  });
+  res.send("API Pix online 🚀");
 });
 
-/* PIX */
+/* 1️⃣ CRIAR PIX */
 app.post("/pix", async (req, res) => {
   try {
-    console.log("Recebendo pedido PIX:", req.body);
-
     const { valor, descricao, email } = req.body;
 
     if (!valor || !email) {
-      return res.status(400).json({
-        erro: "Valor e email são obrigatórios"
-      });
+      return res.status(400).json({ erro: "Dados inválidos" });
     }
 
-    if (!ACCESS_TOKEN) {
-      return res.status(500).json({
-        erro: "MP_TOKEN não configurado"
-      });
-    }
-
-    const resposta = await axios.post(
+    const pagamento = await axios.post(
       "https://api.mercadopago.com/v1/payments",
       {
         transaction_amount: Number(valor),
         description: descricao || "Pagamento Pix",
         payment_method_id: "pix",
-        payer: {
-          email: email
-        }
+        payer: { email }
       },
       {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`,
           "Content-Type": "application/json",
-          "X-Idempotency-Key": `${Date.now()}`
+          "X-Idempotency-Key": `pix-${Date.now()}`
         }
       }
     );
 
-    console.log("Pagamento criado:", resposta.data.id);
-
-    const dados =
-      resposta.data.point_of_interaction?.transaction_data;
-
-    res.json({
-      id: resposta.data.id,
-      status: resposta.data.status,
-      qr_code: dados?.qr_code,
-      qr_code_base64: dados?.qr_code_base64
-    });
-
-  } catch (erro) {
-
-    console.error(
-      "ERRO MERCADO PAGO:",
-      erro.response?.data || erro.message
-    );
-
-    res.status(500).json({
-      erro: "Não foi possível gerar o Pix",
-      detalhes: erro.response?.data || erro.message
-    });
+    res.json(pagamento.data);
+  } catch (err) {
+    console.error("ERRO PIX:", err.response?.data || err.message);
+    res.status(500).json({ erro: "Erro ao gerar Pix" });
   }
 });
 
-/* STATUS */
+/* 2️⃣ CONSULTAR STATUS (🔥 SOLUÇÃO DEFINITIVA 🔥) */
 app.get("/status/:id", async (req, res) => {
+  const { id } = req.params;
 
   try {
-
     const resposta = await axios.get(
-      `https://api.mercadopago.com/v1/payments/${req.params.id}`,
+      `https://api.mercadopago.com/v1/payments/${id}`,
       {
         headers: {
           Authorization: `Bearer ${ACCESS_TOKEN}`
@@ -96,24 +63,14 @@ app.get("/status/:id", async (req, res) => {
       }
     );
 
-    res.json({
-      status: resposta.data.status
-    });
-
-  } catch (erro) {
-
-    console.error(
-      "ERRO STATUS:",
-      erro.response?.data || erro.message
-    );
-
-    res.status(500).json({
-      status: "pending"
-    });
+    res.json({ status: resposta.data.status });
+  } catch (err) {
+    console.error("ERRO STATUS:", err.message);
+    res.json({ status: "pending" });
   }
 });
 
-/* SERVIDOR */
+/* START */
 app.listen(PORT, () => {
-  console.log(`API Pix online na porta ${PORT}`);
+  console.log("Servidor rodando na porta " + PORT);
 });
